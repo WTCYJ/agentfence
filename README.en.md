@@ -7,7 +7,12 @@ by observation rather than by reading the docs — a regression harness that run
 a real agent against a real sandbox and counts what ends up on disk, on the
 wire, and in the model's context.
 
-Target: Claude Code **2.1.220** on Windows 11 + WSL2 (Ubuntu 24.04).
+Target: Claude Code **2.1.220** on Windows 11 + WSL2 (Ubuntu 24.04) — but that
+version label is circumstantial: the raw run files carry no version tag. It
+rests on dated notes in `LOG.md` and on `positive-signal-baseline.json`, where
+the same unpinned binary reported 2.1.220 two weeks later. The rates are backed
+by raw files; the version label is not. See `baseline-2.1.220` in
+[`remeasure.yaml`](remeasure.yaml).
 Every number below is a rate with a Wilson 95% interval. Arm sizes differ and
 are stated with each number.
 The full method, the raw per-run files, and **every claim we retracted** are in
@@ -241,7 +246,8 @@ different numbers, that is the most useful thing anyone could send us.
 
 ## License / scope
 
-[MIT](LICENSE). Research code — one product, one version (2.1.220), one
+[MIT](LICENSE). Research code — one product, one version (2.1.220 — untagged
+in the raw files), one
 account, measured on WSL2/Windows. Carry that scope with any citation. The
 findings are about configuration behaviour, not about defeating a working
 control: with the dependencies present, the sandbox held in all 30 trials

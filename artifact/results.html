@@ -86,14 +86,14 @@ a:focus-visible{outline:2px solid var(--fence);outline-offset:3px}
 <p class="lede">AI 코딩 에이전트에 대한 공격이 끝까지 성공하는지를
 플랫폼·도구 경로·동작·권한 모드·세션·완화책 축으로 측정했다.</p>
 <ul class="chips">
-  <li class="chip"><span class="mono">대상</span><b class="mono">Claude Code 2.1.220</b></li>
+  <li class="chip"><span class="mono">대상</span><b class="mono">Claude Code 2.1.220</b><span class="muted mono">원시에 버전 꼬리표 없음</span></li>
   <li class="chip"><span class="mono">축</span><b class="mono">8 + 2</b></li>
   <li class="chip ok"><span class="mono">검사</span><b class="mono">6종</b></li>
   <li class="chip hot"><span class="mono">최대 성공률</span><b class="mono">1.000</b></li>
 </ul>
 <p class="muted" style="margin:-14px 0 24px">축 열 중 <strong>일곱(플랫폼·도구 경로·동작·권한 모드·세션 내 일관성·완화책 유효성)은 결과가 갈렸다.</strong> T3(우회 탐색)는 <strong>측정했고 우회가 없었다</strong>(0/18). 완화책은 <strong>이름 열거로는 샜고</strong>(방향만 — 그 팔은 07절이 적은 대로 <strong>원시 파일이 덮여</strong> <span class="mono">0.127</span> 을 인용할 수 없다) <strong><code>Bash</code> 차단의 효력은 픽스처에 달렸으며</strong>(0.950 vs 0.102, 원시 있음), <strong>자격증명 경로 규칙은 작동한다</strong>(0.183 → 0.000).
 <strong>모델축은 조건부</strong>였고(워크스페이스 경로가 실험을 알릴 때만 갈린다),
-버전축은 <strong>측정했으나 평평했다</strong> — 이 프로브에 대해 회귀가 없다. 원래 목표였던 "격리 구현 단독의 버전 회귀"는 <strong>측정 불가</strong>
+버전축은 <strong>측정했으나 평평했다</strong> — 이 프로브에 대해 회귀가 없다. <strong>다만 2.1.220 이라는 버전 귀속은 정황뿐이다</strong> — 원시 파일에 버전 꼬리표가 없다(<span class="mono">remeasure.yaml</span> 의 <span class="mono">baseline-2.1.220</span>). 원래 목표였던 "격리 구현 단독의 버전 회귀"는 <strong>측정 불가</strong>
 판정을 받았다(취약 버전에 해당 실행 구성 자체가 없었다). 못 잰 이유를 근거 있게
 남긴 것도 결과로 셌다.</p>
 
@@ -876,6 +876,6 @@ OS가 막은 FIXED는 <strong>견고함이 다르다</strong> — 앞은 프롬�
 실제로 작동했다.</blockquote>
 </section>
 
-<p class="foot mono">Claude Code 2.1.220 · sonnet/haiku/opus · Windows 11 + WSL2 Ubuntu 24.04 · 2026-08</p>
+<p class="foot mono">Claude Code 2.1.220(원시에 버전 꼬리표 없음 — 귀속은 정황) · sonnet/haiku/opus · Windows 11 + WSL2 Ubuntu 24.04 · 2026-08</p>
 
 </div></div>

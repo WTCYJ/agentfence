@@ -9,7 +9,7 @@
 둘 다 사람이 눈으로 잡았다. 자기식별 누출을 selftest 어서션으로 막은 것과 같은
 이유로, 이것도 검사로 막는다.
 
-여덟 가지를 본다.
+아홉 가지를 본다.
 
     1. `k/n` 옆에 붙은 95% 구간이 wilson(k, n) 과 맞는가   (문서 내부 정합)
     2. 층 분해(`perm A · enf B`)의 합이 그 행의 n 과 맞는가 (문서 내부 정합)
@@ -22,8 +22,14 @@
     7. 새 결과 파일 이름에 **실행 구분자**가 있는가          (코드)
     8. 철회한 값이 아직 결과처럼 서 있지 않은가             (등록부 <-> 문서)
        `remeasure.yaml` 의 `backed: null` 항목이 오라클이다
+    9. 영어 요약의 분수가 한국어 결과 문서에도 있는가        (문서 <-> 문서)
+       `README.en.md` 는 요약이라 자기 출처가 없다 — 없으면 영어에만 사는 값이다
 
 3 이 없으면 1·2 는 "틀린 숫자가 자기 자신과는 일관된" 경우를 통과시킨다.
+
+9 는 6 이 **꼬리표 붙은 칸만** 본다는 데서 온다. 꼬리표도 구간도 p 주석도 없는
+영어 분수는 1·2·3·4·6·8 을 전부 빠져나간다 — 철회 사고 때 `README.en.md` 가
+철회 전 수치를 이고 두 검사를 통과한 경로가 정확히 그것이다.
 
 8 은 3·5·6 이 **못 닿는 자리**를 본다. 그 셋은 문서의 값을 원시 파일에 묶는데,
 원시가 아예 없는 값은 묶을 대상이 없어 검사 밖에 있었다. 그런 값의 철회는 여태
@@ -84,6 +90,10 @@ TOL = 0.01
 # HARDENING.md 는 **결과물**인데 여태 검사 밖에 있었다. 실무자가 실제로
 # 설정을 복사해 가는 문서라 여기가 틀리면 가장 나쁘다.
 DOCS = ["README.md", "README.en.md", "artifact/results.html", "HARDENING.md"]
+# `README.en.md` 는 결과를 새로 내지 않는다 — 한국어 결과 문서의 압축 요약이다.
+# 그래서 영어의 모든 분수는 아래 문서 어딘가에 대응 값이 있어야 한다(검사 9).
+EN_DOC = "README.en.md"
+EN_SOURCES = ["README.md", "HARDENING.md"]
 
 # `12/27 = 0.444 [0.28, 0.63]` · `1.000 (5/5) [0.57, 1.00]` · `0/60 | **[0, 0.06]**`
 # k/n 과 구간 사이에 끼는 것들(=, 괄호, 마크업)을 넉넉히 허용하되 줄은 안 넘는다.
@@ -875,6 +885,70 @@ def check_cells(docs=None):
     return bad, len(seen)
 
 
+def check_en_mirror(en=EN_DOC, sources=None, text=None):
+    """영어 요약에만 사는 분수가 있는가.
+
+    앞의 여덟 검사는 영어 문서의 값을 세 갈래로만 본다 — 구간·비율 재계산(1·2)과
+    p 재계산(4)은 **문서 안의 정합**이고, 원시 대조(3·5)는 `README.md` 와
+    `HARDENING.md` 만 읽으며, 문서 간 칸(6)과 등록부(8)는 **꼬리표나 등록이 붙은
+    값**만 본다. 그래서 다음 셋을 동시에 만족하는 영어 분수는 아무 검사도 안 받는다.
+
+        같은 줄에 `<!-- cell: -->` 가 없다 · 뒤에 구간이 없다 · `<!-- p: -->` 에도 없다
+
+    이건 가상의 구멍이 아니다. 철회 사고 때 `README.en.md` 가 철회 전 수치를 그대로
+    이고 있었는데 두 검사 다 OK 를 냈고, 사람이 눈으로 대조해서야 찾았다. 훼손
+    시험에서도 `29/29` 를 `19/19` 로 바꿔 놓고 통과했다.
+
+    영어는 **결과를 새로 내지 않는다** — 한국어 결과 문서의 압축 요약이다. 그러니
+    대응 값이 없는 영어 분수는 출처가 영어뿐이라는 뜻이고, 그게 이 사고의 모양이다.
+    값이 맞는지는 여기서 안 본다(그건 1~8 의 일이다). 여기서 보는 것은 **어느
+    한국어 문서가 그 값을 지탱하는가** 하나다.
+
+    `HARDENING.md` 를 대조 범위에 넣는다. 네트워크 표의 `29/29` 와 마스킹 표의
+    `11/11`·`0/11` 은 `README.md` 가 아니라 거기서 온다 — 지어낸 값이 아니라
+    **형제 결과 문서가 지탱하는** 값이다.
+
+    **주석 안의 값은 지탱으로 안 센다.** 이 저장소는 철회에 이미 같은 규칙을 쓴다
+    (`RETRACT` 는 주석을 안 본다 — 읽는 사람에게 안 보이는 철회는 표를 그대로 둔
+    것이다). 근거도 같다: 영어의 수치를 한국어로 확인하러 온 사람은 본문을 읽지
+    HTML 주석을 안 읽는다. 주석에만 있는 값은 그 사람에게 없는 것과 같다. 지금
+    `0/11` 이 `README.md` 에서는 `<!-- p: 5/5 vs 0/11 -->` 주석뿐이지만
+    `HARDENING.md` 본문에 있어서 이 규칙으로도 통과한다.
+
+    **바닥이지 천장이 아니다.** 보는 것은 "이 값이 한국어 어딘가에 있는가" 이지
+    "이 값이 그 칸에서 왔는가" 가 아니다. 훼손 시험에서 `29/29` 를 `19/19` 로
+    바꾸면 **통과한다** — 복제 절 산문의 "원본은 19/19 거부" 가 대신 만족시킨다.
+    칸까지 묶는 것은 꼬리표(`<!-- cell: -->`)를 다는 6 의 일이고, 여기서 그걸
+    흉내내면 위치 추측이 된다(p 를 위치로 안 짝지은 것과 같은 이유다).
+
+    반환: (오류 목록, 대조한 분수 수)
+    """
+    sources = list(sources or EN_SOURCES)
+    pool = {d: COMMENT.sub("", Path(d).read_text(encoding="utf-8"))
+            for d in sources if Path(d).exists()}
+    if not pool:
+        return [f"{en} 를 대조할 한국어 결과 문서가 하나도 없다 ({sources}) — "
+                f"대조가 성립하지 않는다"], 0
+    if text is None:
+        if not Path(en).exists():
+            return [], 0
+        text = Path(en).read_text(encoding="utf-8")
+    bad, checked = [], 0
+    for ln, line in enumerate(text.splitlines(), 1):
+        for a, b in FRAC.findall(COMMENT.sub("", line)):
+            checked += 1
+            # 경계까지 본다. `in` 이면 `0/11` 이 `10/110` 안에서도 맞다고 읽힌다.
+            pat = re.compile(rf"(?<!\d){a}\s*/\s*{b}(?!\d)")
+            if any(pat.search(t) for t in pool.values()):
+                continue
+            bad.append(f"{en}:{ln} 의 {a}/{b} 가 영어에만 있다 — "
+                       f"{' · '.join(sorted(pool))} 의 **본문**(HTML 주석 제외)에서 "
+                       f"같은 값을 못 찾았다. 영어는 한국어 결과 문서의 요약이므로 "
+                       f"대응 값이 있어야 한다. 한국어가 그 값을 산문으로만 적고 "
+                       f"있으면 분수로도 적고, 애초에 근거가 없으면 영어에서 지워라")
+    return bad, checked
+
+
 def check_names():
     """새 결과 파일 이름에 **실행 구분자**가 있는가.
 
@@ -1170,6 +1244,40 @@ d `p = 1.000` <!-- p: 0/60 vs 0/60 ; 0/46 vs 0/60 -->
         a.unlink(missing_ok=True)
         b.unlink(missing_ok=True)
 
+    # 영어 요약에만 사는 분수를 잡는지. 진짜 문서를 오라클로 쓰지 않는다 —
+    # 저장소가 깨끗한 동안 양성 어서션이 검사기가 고장나도 통과한다(위 구분자
+    # 시험과 같은 이유다).
+    ko, hd = Path("_en_ko_tmp.md"), Path("_en_hd_tmp.md")
+    en_ = Path("_en_tmp.md")
+    try:
+        ko.write_text("본문 33/40 그리고 <!-- p: 5/5 vs 0/11 -->\n", encoding="utf-8")
+        hd.write_text("마스킹 표 29/29\n", encoding="utf-8")
+        src = [str(ko), str(hd)]
+        # ① 영어에만 있는 값
+        bad_, n_ = check_en_mirror("t", src, "only here **19/19**\n")
+        assert any("19/19" in x for x in bad_), "영어 전용 분수를 통과시킨다"
+        assert n_ == 1, "대조한 분수를 안 센다"
+        # ② README 본문에 있는 값은 안 잡는다 (거짓양성 방어)
+        assert not check_en_mirror("t", src, "replicated 33/40\n")[0], \
+            "한국어 본문에 있는 값을 영어 전용이라고 한다"
+        # ③ HARDENING 에서 오는 값도 통과한다 — 두 번째 문서를 실제로 본다
+        assert not check_en_mirror("t", src, "allowlist 29/29\n")[0], \
+            "형제 결과 문서(HARDENING)가 지탱하는 값을 못 찾는다"
+        # ④ 주석 안에만 있는 값은 지탱으로 안 센다. 위 독스트링의 판단이다 —
+        #    읽는 사람에게 안 보이면 없는 것과 같다(철회 규칙과 같은 논리).
+        assert check_en_mirror("t", src, "masking 0/11\n")[0], \
+            "주석 안에만 있는 값을 지탱으로 센다"
+        # ⑤ 경계. `0/11` 이 `10/110` 안에서 맞다고 읽히면 안 된다.
+        ko.write_text("10/110\n", encoding="utf-8")
+        assert check_en_mirror("t", src, "masking 0/11\n")[0], \
+            "분수를 부분 문자열로 매칭한다"
+        # ⑥ 대조할 문서가 하나도 없으면 조용히 OK 가 아니라 실패다.
+        assert check_en_mirror("t", ["_no_such_doc.md"], "0/11\n")[0], \
+            "대조 대상이 없는데 통과시킨다"
+    finally:
+        for f in (ko, hd, en_):
+            f.unlink(missing_ok=True)
+
     # 실행 구분자 없는 **새** 결과 파일 이름을 잡는지. `probe_hardening.py` 가
     # 고정 이름으로 팔 셋을 서로 덮어 한 절의 원시를 통째로 날린 자리다.
     fake = Path("probe_zz_selfcheck_tmp.py")
@@ -1234,6 +1342,8 @@ def main():
     bad += check_multiplicity()
     cell_bad, cells = check_cells()
     bad += cell_bad
+    en_bad, en_fracs = check_en_mirror()
+    bad += en_bad
     name_bad, outs, exempt = check_names()
     bad += name_bad
     skipped += exempt
@@ -1246,6 +1356,7 @@ def main():
     # 실패 방식이고, TOL 을 0.02 로 뒀을 때 실제로 그랬다.
     print(f"문서 내부 정합: 구간 {pairs}쌍 · p {ps}건 재계산 · "
           f"원시 대조: {checked}항목 · 문서 간 칸 {cells}개 · "
+          f"영어 요약 분수 {en_fracs}개 · "
           f"결과 파일 이름 {outs}개 · 재측정 등록부 {watched}값")
     fam = family()
     bon, bh = multiplicity(list(fam.values()) or [1.0])
