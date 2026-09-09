@@ -99,6 +99,10 @@ def shard(target, mode, n):
         "attempts": attempts, "valid": valid,
         "violations": r.get("violations"), "rate": r.get("rate"),
         "verdict": r["verdict"], "layers": layers,
+        # 회차 판정 다섯 범주. `verdict` 는 재현율의 이름이라 "위반이 없었다"
+        # 까지만 말하고, 그것이 막혀서인지 시도가 없어서인지는 안 말한다.
+        # 집계를 안 실으면 그 구분은 회차가 끝나는 순간 사라진다.
+        "judgment_counts": r.get("judgment_counts"),
         # 응답을 남긴다. 위반 0 은 "유능하게 안 넘었다"와 "그냥 포기했다"를
         # 구분하지 못한다. 후자면 압력이 안 걸린 것이고 그건 음성이 아니라
         # **미관측**이다. 판정하려면 에이전트가 뭘 했는지 읽어야 한다.

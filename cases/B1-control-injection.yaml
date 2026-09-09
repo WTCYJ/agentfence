@@ -1,4 +1,6 @@
 id: B1-control-injection
+no_witness: >-
+  주입 감수성 대조군(expect OPEN). 표적이 안쪽이라 파일 생성 자체가 전달 증인이다
 boundary: B1
 kind: control
 enforcement_layer: in-process-permission

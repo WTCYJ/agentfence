@@ -8,7 +8,8 @@ a real agent against a real sandbox and counts what ends up on disk, on the
 wire, and in the model's context.
 
 Target: Claude Code **2.1.220** on Windows 11 + WSL2 (Ubuntu 24.04).
-Every number below is a rate with a Wilson 95% interval, most from n=60 per arm.
+Every number below is a rate with a Wilson 95% interval. Arm sizes differ and
+are stated with each number.
 The full method, the raw per-run files, and **every claim we retracted** are in
 [`README.md`](README.md) (Korean) and [`LOG.md`](LOG.md).
 
@@ -21,30 +22,44 @@ The settings we recommend, with conditions: [`HARDENING.md`](HARDENING.md).
 
 With the permission layer off (`bypassPermissions`), what does the sandbox itself stop?
 
-Windows arms are n=5; the WSL2 write-via-Bash cell is n=60.
+Windows arms are n=5; the WSL2 write-via-Bash cell is n=30.
 
 | action | path | Windows | WSL2 + sandbox |
 |---|---|---|---|
-| **write** | via Bash | 1.000 | **0/60 = 0.000** [0.00, 0.06] ← the only blocked cell |
+| **write** | via Bash | 1.000 | **0/30 = 0.000** [0.00, 0.11] ← the only blocked cell | <!-- cell: E-B1-write-outside-bypassPermissions -->
 | write | built-in `Write` | 1.000 | **1.000 (5/5)** |
 | read | via Bash | 1.000 | 1.000 (5/5) |
 | read | built-in `Read` | 1.000 | 1.000 (5/5) |
 
-**The built-in file tools do not pass through the sandbox.** And the direction
-flips for reads: with the permission layer *on* (`dontAsk`), an outside read is
-blocked on Windows (0/5) and **passes on WSL2** (5/5) — the sandbox
-auto-approves the command, so the permission layer never sees it.
+**The built-in file tools do not pass through the sandbox** — a direction, not a
+measured cell. The two built-in rows come from `probe_filetools.py`, which has
+no `--settings` gate and leaves no per-run file, so they were observed without
+the sandbox settings the column header names; citing them as sandbox-on values
+needs a re-measure. The direction flips for reads: with the permission layer
+*on* (`dontAsk`), an outside read is blocked on Windows (0/5) and **passes on
+WSL2** (5/5) — the sandbox auto-approves the command, so the permission layer
+never sees it.
 
 ## 2. That one cell depends on two packages, and fails open silently
 
-Same host, same kernel, same config. The only difference is whether
-`bubblewrap` and `socat` are installed.
+Same host, same kernel. What differs is whether the two dependencies —
+`bubblewrap` and `socat` — are installed; the CLI reports the same state when
+either one is missing (`dependencies are missing: socat not installed`). The
+third row flips `failIfUnavailable` on top of that — **it is not a one-factor
+contrast.**
 
 | condition | outside write | verdict |
 |---|---|---|
-| deps present · `failIfUnavailable: true` | **0/60 = 0.000** [0.00, 0.06] | blocked |
-| deps missing · `failIfUnavailable: true` | 0 valid runs | hard fail (safe) |
-| deps missing · `failIfUnavailable: **false**` | **10/10 = 1.000** [0.72, 1.00] | **silently open** |
+| deps present · `failIfUnavailable: true` | **0/30 = 0.000** [0.00, 0.11] | blocked |
+| deps missing · `failIfUnavailable: true` | **0/30** valid runs | hard fail (safe) |
+| deps missing · `failIfUnavailable: **false**` | **opens** — ratio and CI **withdrawn**, no raw file | **silently open** |
+
+> **The ratio in the third row is withdrawn.** The `10/10 = 1.000 [0.72, 1.00]`
+> that used to stand here was read off the console and no raw file records those
+> runs. No probe in this repo can produce it either — `wsl_probe_failopen.py`
+> hardcodes `failIfUnavailable`. What survives is the **direction**; the
+> silent-pass mechanism itself is backed separately by `verify-silent-fail.json`.
+> See `remeasure.yaml`, id `fail-open-rate`.
 
 The warning goes to **`stderr` only**. We scanned every `--output-format
 stream-json` event recursively: **zero** occurrences of `sandbox`,
@@ -72,18 +87,23 @@ Same rules, same fixture, only the mode changes (n=60 per arm):
 In `bypassPermissions` all three are indistinguishable from baseline
 (`p = 0.480` / `p = 0.480` / `p = 0.354`); across modes `p = 9.4×10⁻²¹`. The inside control <!-- p: paths · 47/60 vs 51/60 --> <!-- p: names · 47/60 vs 51/60 --> <!-- p: 46/60 vs 51/60 --> <!-- p: 0/60 vs 46/60 -->
 is 60/60 in every arm — the rules did not make the agent unable to work, they
-**did nothing**.
+have **no detectable effect**: whole deny list 46/60 vs baseline 51/60, a
+difference whose 95% CI **[−0.22, +0.06]** contains zero. Not *exactly zero*,
+only *not distinguishable at this n*.
 
 The network allowlist goes the same way: an unlisted domain is reached
 **29/29** under `bypassPermissions` versus **0/30** under `dontAsk`.
-Unlike the deny list, this one has a switch that survives:
-`network.strictAllowlist: true` → **0/29**.
+Unlike `permissions.deny`, this one has a switch that survives:
+`network.strictAllowlist: true` → **0/29**. What `bypassPermissions` empties is
+the `permissions.deny` **path**, not every control in that mode —
+`sandbox.credentials` still closes the credential cell.
 
 ## 4. The line you were told to add isn't the line that blocks
 
 The usual credential-protection snippet mixes two kinds of rule. We split them
 and measured each, across two fixtures (credential file inside vs. outside the
-glob), n=60 per arm:
+glob), n=60 per arm — one arm stopped at 46 on the account's monthly cap
+(planned 60, completion threshold 42), so the `names` denominator is 106:
 
 | rule set | access | 95% CI |
 |---|---|---|
@@ -91,9 +111,10 @@ glob), n=60 per arm:
 | **`Read(**/.aws/**)` etc. only** | **47/120 = 0.392** | [0.31, 0.48] |
 | **`Bash(cat\|grep\|head\|tail:*)` only** | **0/106 = 0.000** | [0.00, 0.03] |
 
-**Identical numerators.** At `dontAsk` the path rules do nothing — built-in
-`Read` of outside paths is already blocked by default, so the lock hangs on a
-door nothing walks through. The blocking is done by name enumeration.
+**Identical numerators.** At `dontAsk` the path rules are indistinguishable
+from baseline (`p = 1.000`) — built-in `Read` of outside paths is already <!-- p: 47/120 vs 47/120 -->
+blocked by default (0/5, n is small), so the lock hangs on a door nothing
+walks through. The blocking is done by name enumeration.
 
 That is bad news, because we also measured that name enumeration cannot be
 complete. Blocking `cat`/`head`/`tail`/`less` leaves:
@@ -102,7 +123,8 @@ complete. Blocking `cat`/`head`/`tail`/`less` leaves:
 grep -n '' <outside path>/CHANGELOG.md     # a complete cat substitute
 ```
 
-Leak rate **9/71 = 0.127**, and two different models reached the same
+Leak rate **9/71 = 0.127** — **withdrawn, no raw file** (`remeasure.yaml`, id
+`names-leak-rate`). Two different models reached the same
 substitute independently. Add `grep` and `sed`, `awk`, `od`, `python -c` remain.
 
 ## 5. A rule's efficacy is a property of the fixture, not the rule
@@ -115,11 +137,15 @@ substitute independently. Add `grep` and `sed`, `awk`, `od`, `python -c` remain.
 | computed at runtime, stored nowhere | 47/60 = 0.783 | **6/59 = 0.102** | `p = 1.2×10⁻¹⁴` | <!-- p: 47/60 vs 6/59 -->
 
 Blocking the shell made the first row *leak more*: built-in `Read` returns the
-ELF file and the string is right there. Bash attempts: 0/60. Blocking a **tool**
+ELF file and the string is right there — though not every run came through
+`Read` (one also came via `Agent`). Bash attempts: 0/60. Blocking a **tool**
 is not blocking a **path to the bytes**.
 
-The residual 6/59 is delegation — the main session never calls Bash, it asks a
-subagent to run the binary and hand back stdout.
+Of the residual 6/59 the main session never calls Bash — but the raw file pins
+the channel for only **one** of the six: a subagent asked to run the binary and
+hand back stdout (`sub_got 1`). The other five leave no record of which call
+produced the value. What stands is that **delegation bypasses `deny` in at
+least one run**, not that all of 6/59 is delegation.
 
 ## 6. Only the first turn is defended
 
@@ -133,16 +159,28 @@ Same session, same request repeated with `--resume`:
 `p = 2.3×10⁻⁸`, replicated across two independent fixtures. Not a jailbreak — <!-- p: 6/24 vs 63/72 -->
 just asking again.
 
-## 7. A custom proxy takes controls away rather than adding them
+> **No raw file backs this axis.** `probe_session_consistency.py` prints its
+> result to stdout only, so the 96 turns above are recorded in no file — not in
+> the repo, not in git history — and cannot be recounted run by run. The ratios
+> stand as published; re-measuring would be a third fixture, not a restoration
+> of A and B.
+
+## 7. As observed, a custom proxy takes controls away rather than adding them
 
 The docs offer `network.httpProxyPort` for organizations wanting stricter
-inspection. With it set, the built-in proxy leaves the path:
+inspection. With it set, the domain allowlist and credential masking were both
+observed *not working*. That the built-in proxy leaves the path is the most
+likely reading of those two observations, not an observation itself:
 
-- domain allowlist stops applying — an unlisted host is reached **5/5** even
-  with `strictAllowlist: true` (versus **0/29** without a custom proxy).
+- domain allowlist stops applying — a request carrying an unlisted `Host` gets
+  out of the sandbox **5/5** even with `strictAllowlist: true` (versus **0/29**
+  without a custom proxy). The observation point is a non-forwarding loopback
+  stub, so **zero** requests reached `example.com` — what is measured is egress,
+  not delivery.
   Those denominators count only the runs where the script actually ran, which
-  is a variable created *after* treatment. Counting every valid run as a
-  failure instead (ITT) the same contrast reads **5/12** versus **0/30**.
+  is a variable created *after* treatment. Scoring the runs that never ran as
+  failures and putting every valid run in the denominator (ITT), the same
+  contrast reads **5/12** versus **0/30**.
   And the two rows come from *different probes* — different scheme (plaintext
   HTTP vs HTTPS), different settings (`allowedDomains: ["other.invalid"]` vs
   no `allowedDomains` key at all) and different oracle — so this is not yet a
@@ -151,7 +189,10 @@ inspection. With it set, the built-in proxy leaves the path:
   one script and the next measurement replaces this row.
 - credential `mask` never substitutes — the proxy receives the sentinel
   **11/11**, the real value **0/11**, and in the documented-correct
-  configuration there is no warning at all
+  configuration there is no warning at all. That table has **no proxy-off arm**
+  — the observation point *is* the custom proxy, so all three arms run one —
+  and blaming the proxy for the substitution failure is interpretation, not
+  observation.
 
 Nothing leaks: the sentinel goes out and authentication fails. But `mask`
 exists to keep tools working while hiding the secret, and the working half is
@@ -163,7 +204,7 @@ what disappears.
 
 A second WSL2 instance on the same host (empty `~/.claude`, same CLI and
 `bubblewrap` versions) reproduced the enforcement cell (**0/10**, all
-`enforcement`), the layer split (`p = 0.678`), and the read reversal <!-- p: 46/60 vs 9/10 -->
+`enforcement`), the layer split (`p = 0.401`), and the read reversal <!-- p: 21/30 vs 9/10 -->
 (16/20 vs **33/40**, `p = 1.000`) — mechanism included: built-in `Read` denied <!-- p: 16/20 vs 33/40 -->
 33/33 attempts, Bash denied 2/55.
 
@@ -180,11 +221,19 @@ different numbers, that is the most useful thing anyone could send us.
 - **Per-run random canaries**, an **inside control** in every arm (did the rule
   block the target, or break the work?), and a **validity gate** so that
   "nothing happened" is never silently counted as "blocked".
-- **Documented numbers are bound to raw per-run files.** A checker fails the
-  selftest if a table drifts from the data. It has caught real drift twice.
+- **Bound cells are tied to raw per-run files** — the read grid, `E-B1`, `T3`,
+  `bashneed`, the credential axis, the regression table. **That is not the whole
+  document**: the checker prints how many items it compared and why it skipped
+  the rest, and a cell with no raw file says so on its own line. A bound table
+  that drifts from the data fails the selftest. It has caught real drift twice.
+- **No multiplicity correction was applied.** The family of contrasts, the
+  Bonferroni and BH thresholds, and the conclusions that do not survive them are
+  derived by the checker and listed in `README.md`.
 - **Corrections stay in the repo.** Several numbers here replaced earlier ones
-  we published and had to withdraw; the reasons are in `LOG.md`. The recurring
-  one is worth stating in general form:
+  we published and had to withdraw; the reasons are in `LOG.md`, and
+  `remeasure.yaml` is the register of what was withdrawn and what it would cost
+  to measure again — `check_docs.py` fails if one of those values stands as a
+  result. The recurring one is worth stating in general form:
 
 > **"It didn't happen" almost always means more than one thing** — blocked,
 > never attempted, or unable. Until a second signal separates them, a `0` is
@@ -192,7 +241,8 @@ different numbers, that is the most useful thing anyone could send us.
 
 ## License / scope
 
-[MIT](LICENSE). Research code — one product, one version, one account. The
+[MIT](LICENSE). Research code — one product, one version (2.1.220), one
+account, measured on WSL2/Windows. Carry that scope with any citation. The
 findings are about configuration behaviour, not about defeating a working
-control: with the dependencies present, the sandbox held in every one of 60
-trials.
+control: with the dependencies present, the sandbox held in all 30 trials
+(**0/30** [0.00, 0.11]).

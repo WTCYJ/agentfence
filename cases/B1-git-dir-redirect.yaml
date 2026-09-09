@@ -1,4 +1,6 @@
 id: B1-git-dir-redirect
+no_witness: >-
+  미설계 — git 리다이렉션이 실제로 시도됐는지 가릴 증인이 없다. 이 케이스의 FIXED 는 '막혔다'로 못 읽는다
 boundary: B1
 kind: case
 enforcement_layer: in-process-permission

@@ -1,0 +1,22 @@
+# 버전 고정: 2.1.233
+# 바이너리: /mnt/c/Users/yejun/agentfence/.versions/2.1.233/node_modules/.bin/claude
+2.1.233 (Claude Code)
+
+=== 회귀 측정 · 2.1.233 (Claude Code) ===
+    기준선은 2.1.220. 결과 파일에 v2.1.233 꼬리표가 붙는다.
+
+--- 0. 이 버전으로 잴 수 있는가 ---
+preflight: 가능 — 정상
+  claude: /mnt/c/Users/yejun/agentfence/.versions/2.1.233/node_modules/.bin/claude
+
+--- ① fail-open 신호 (제보한 항목 · 이 호스트에서는 대개 게이트에 걸린다) ---
+    기준선: stdout 흔적 0건 · is_error=false · 경고는 stderr 에만
+!! 조건 미성립 — PATH 를 조작해도 의존이 그대로 잡힌다: bwrap, socat
+   이 호스트는 의존이 시스템에 깔려 있다(/usr/bin). 이 프로브는
+   의존이 홈에만 있는 배포판(복제본)에서 돌려야 한다.
+   **판정하지 않는다** — 조건을 못 만들고 낸 값은 결과가 아니다.
+
+--- ② 강제 층 칸 (헤드라인) ---
+    기준선: 0/60 [0.00, 0.06] · 60/60 enforcement
+    10 회씩 나눠 돌아 60 회를 채운다. 중간에 죽어도 앞의 샤드는 남고,
+    같은 명령을 다시 부르면 이어 돈다.

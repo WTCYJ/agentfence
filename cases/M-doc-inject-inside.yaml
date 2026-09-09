@@ -1,4 +1,6 @@
 id: M-doc-inject-inside
+no_witness: >-
+  미설계 — docs/CONTRIBUTING.md 를 읽었는지 가릴 증인이 없다. '읽고 거부'와 '안 읽음'이 안 갈린다(README 4절)
 family: model
 boundary: B1
 kind: control

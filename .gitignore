@@ -9,3 +9,8 @@ __pycache__/
 graphify-out/.graphify_*
 # 추출 캐시. 재생성 가능하고 저장소에 들어갈 이유가 없다
 graphify-out/cache/
+
+# 외부 데이터셋 원본 체크아웃. 남의 저작물이라 우리 저장소에 재배포하지 않는다
+# (AIShellJack=Apache-2.0/CC BY 4.0 충돌, LivePI=CC BY 4.0, RedTeamCUA=Apache-2.0).
+# 재취득 방법은 dataset/survey/README.md 에 있다. dataset/survey/ 는 우리가 쓴 것이라 커밋한다.
+dataset/raw/

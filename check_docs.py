@@ -9,15 +9,30 @@
 둘 다 사람이 눈으로 잡았다. 자기식별 누출을 selftest 어서션으로 막은 것과 같은
 이유로, 이것도 검사로 막는다.
 
-네 가지를 본다.
+여덟 가지를 본다.
 
     1. `k/n` 옆에 붙은 95% 구간이 wilson(k, n) 과 맞는가   (문서 내부 정합)
     2. 층 분해(`perm A · enf B`)의 합이 그 행의 n 과 맞는가 (문서 내부 정합)
     3. 하중을 지는 표의 k/n 이 **원시 측정 파일**과 맞는가  (문서 <-> 데이터)
        회귀표 행은 **구간까지** 요구한다 — n 없는 「회귀 없음」은 문장일 뿐이다
     4. `p = …` 가 근거로 적힌 2x2 의 Fisher 와 맞는가       (문서 내부 정합)
+    5. 절 안의 **통합값**이 원시 판들의 합인가              (문서 <-> 데이터)
+       표의 「통합」 행은 위 팔 행들의 합인가                (문서 내부 정합)
+    6. 네 문서가 같은 칸을 **같은 분수**로 게시하는가        (문서 <-> 문서)
+    7. 새 결과 파일 이름에 **실행 구분자**가 있는가          (코드)
+    8. 철회한 값이 아직 결과처럼 서 있지 않은가             (등록부 <-> 문서)
+       `remeasure.yaml` 의 `backed: null` 항목이 오라클이다
 
 3 이 없으면 1·2 는 "틀린 숫자가 자기 자신과는 일관된" 경우를 통과시킨다.
+
+8 은 3·5·6 이 **못 닿는 자리**를 본다. 그 셋은 문서의 값을 원시 파일에 묶는데,
+원시가 아예 없는 값은 묶을 대상이 없어 검사 밖에 있었다. 그런 값의 철회는 여태
+산문 한 줄이었고 **표는 그대로 남았다** — 인용하는 사람은 표를 본다.
+
+5·6·7 은 감사가 뚫고 들어온 세 자리다. 3 은 파일 하나의
+`{violations}/{valid}` 가 절에 있는지만 봐서, 같은 절의 통합값(5)도 옆 문서의
+같은 칸(6)도 안 봤다. 7 은 데이터가 아니라 **데이터가 생기는 자리**를 본다 —
+고정 이름이 팔 셋을 서로 덮어 한 절의 원시가 통째로 사라진 적이 있다.
 
 4 는 3 **위에** 얹힌다. p 를 묶는 대상은 문서 안의 k/n 이고, 그 k/n 이 측정과
 맞는지는 3 의 일이다. 3 이 안 덮는 표의 p 는 "옮겨 적다 틀린 것은 잡히지만
@@ -39,6 +54,17 @@
     검사기에만 보인다. 대신 **검사기도 주석 안의 분수는 1·2·3 에 안 쓴다** —
     표에서 사라진 값을 주석이 대신 만족시키면 "아무것도 안 보고 OK" 가 된다.
 
+**통합값·문서 간 칸 표기 규칙** — 5·6 은 이것을 전제로만 성립한다.
+
+    (4) 여러 판·여러 팔을 합친 값은 자기 줄에 출처를 단다.
+            … 통합 `0/60` <!-- pool: 0/30 + 0/30 -->    합을 검사한다
+            … 통합 `0/60` <!-- pool: 원시 없음 -->      건너뜀 목록에 인쇄한다
+        출처에 적은 판은 **원시 파일에 실제로 있는 (위반, 유효)** 여야 한다.
+    (5) 네 문서가 같이 게시하는 칸은 같은 꼬리표를 단다.
+            | … | **0/30** | … | <!-- cell: E-B1-write-outside-bypassPermissions -->
+        꼬리표 이름이 `<케이스>-<모드>` 면 원시 합까지 요구한다. 꼬리표가 한
+        문서에만 있으면 대조가 성립하지 않으므로 그것도 실패다.
+
     python check_docs.py            직접 실행
     python runner.py selftest       selftest 안에서도 돈다
 """
@@ -46,6 +72,8 @@ import json
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 from classify_refusals import fisher, wilson
 
@@ -65,6 +93,9 @@ DOCS = ["README.md", "README.en.md", "artifact/results.html", "HARDENING.md"]
 # 앞 분수가 뒤 구간과 짝지어져 오탐이 난다 — 이 저장소에서 세 번 났고 세 번
 # 다 표 배치를 고쳐서 해결했다. 검사기를 느슨하게 하는 쪽이 아니다.
 CI = re.compile(r"(\d+)\s*/\s*(\d+)[^\[\n]{0,80}?\[\s*([\d.]+)\s*,\s*([\d.]+)\s*\]")
+# `0/30 = 0.000` · `21/30 = 0.700` · `1.000 (5/5)` 은 잡지 않는다(비율이 앞).
+# 분수 바로 뒤의 `= 0.xxx` 만 본다 — 사이에 다른 수가 끼면 짝이 어긋난다.
+RATE = re.compile(r"(\d+)\s*/\s*(\d+)\s*=\s*(\d*\.\d+)")
 # `perm 25 · enf 5` / `permission 25 · enforcement 5`
 LAYER = re.compile(r"perm(?:ission)?\D{0,12}?(\d+)\D{0,40}?enf(?:orcement)?\D{0,12}?(\d+)")
 
@@ -88,6 +119,71 @@ CONT = re.compile(r"^`?\s*[·,/]\s*`?\d")
 # 주석 안의 분수는 1·2·3 의 입력이 아니다. 위 독스트링 마지막 문단 참조.
 COMMENT = re.compile(r"<!--.*?-->")
 
+# 경계까지 보는 분수. `in` 으로 보면 `0/10` 이 `10/100` 안에서도 맞는 것으로 읽힌다.
+FRAC = re.compile(r"(?<!\d)(\d+)\s*/\s*(\d+)(?!\d)")
+# **통합값 표기 규칙.** 여러 판·여러 팔을 합친 값은 자기 줄에 출처를 단다.
+#     … 통합 `0/60` <!-- pool: 0/30 + 0/30 -->      합이 맞는지 검사한다
+#     … 통합 `0/60` <!-- pool: 원시 없음 -->        건너뜀 목록에 인쇄한다
+# 이게 없으면 절 안의 통합값은 **아무도 안 본다** — 바인딩은 파일 하나의
+# `{violations}/{valid}` 가 절에 있는지만 보기 때문이다. 실제로 그래서 같은 절의
+# `0/30` 은 검사되는데 `0/60` 은 원시 없이 서 있었다.
+POOLNOTE = re.compile(r"<!--\s*pool:\s*(.*?)\s*-->")
+# **문서 간 같은 칸 표기 규칙.** 네 문서가 같은 칸을 게시하면 같은 꼬리표를 단다.
+#     | … | **0/30** | … | <!-- cell: E-B1-write-outside-bypassPermissions -->
+# 헤드라인 하나가 문서마다 다른 분모로 나가 있던 것(0/34 · 52회 · 46)이 이걸
+# 넣은 이유다. 꼬리표가 붙은 줄은 **전부 같은 분수**여야 한다.
+CELLNOTE = re.compile(r"<!--\s*cell:\s*([\w.:-]+)\s*-->")
+# 표의 「통합」 행. 이 행은 위 팔 행들의 **합**이어야 한다.
+POOLROW = re.compile(r"통합|합계|pooled|combined|total", re.I)
+# 결과 파일 이름을 만드는 자리. 바깥 따옴표만 짝지어서 f-string 안의
+# `{'-' + tag if tag else ''}` 같은 내부 따옴표에 안 걸린다.
+OUTNAME = re.compile(r"""(?:Path|open)\(\s*f?(["'])((?:(?!\1).)*\.jsonl?)\1""")
+# **실행 구분자의 출처.** 변수 이름을 나열하지 않는다 — 새 프로브가 다른 이름을
+# 써도 UTC 타임스탬프나 난수에서 왔으면 통과해야 하고, `s` 같은 이름을 통째로
+# 허용하면 아무 `s` 나 구분자로 읽힌다.
+DISCRIM = re.compile(r"strftime|token_hex|uuid|%Y%m%dT%H%M%S")
+# f-string 의 치환 필드
+FIELD = re.compile(r"\{([^{}]*)\}")
+
+# **재측정 등록부.** 철회했거나 근거가 없는 칸의 목록이자 8 의 입력이다.
+# 산문으로만 철회하면 **표는 그대로 남는다** — 7 절의 통합 행이 그렇게 서 있었고
+# 표의 한 행은 혼자 인용되고 혼자 스크린샷된다. 그래서 값 단위로 되먹인다.
+REGISTRY = "remeasure.yaml"
+# 철회 문맥. **같은 줄**만 인정한다. 절 단위로 인정하면 철회 문장 하나가 그 절의
+# 모든 값을 통과시키고, 그건 이 검사기의 고질적 실패(아무것도 안 보고 OK)다.
+# 주석은 여기서 안 센다(아래 `_flat` 이 지운다) — 읽는 사람에게 안 보이는 철회는
+# 표를 그대로 두는 것과 같다.
+RETRACT = re.compile(r"철회|거둬들|인용할 수 없|인용하지 마|원시 파일 없|원시가 없|"
+                     r"withdrawn|retracted|not quotable", re.I)
+# 같은 값을 문서마다 다른 문법으로 강조한다(마크다운 `**`, HTML `<strong>`).
+# 표기를 지우고 값만 남겨야 네 문서를 한 규칙으로 볼 수 있다.
+TAGS = re.compile(r"<[^>]+>")
+
+# WSL 프로브 결과를 문서에 묶는 표 — (케이스, 모드, README 절).
+# 원시는 `wsl-<케이스>-<모드>-<구분자>.json` 이다. 모듈 수준에 두는 이유는
+# check_raw 와 check_cells 가 **같은 목록**을 봐야 하기 때문이다. 둘이 갈리면
+# 한쪽만 묶인 칸이 생기고, 그게 헤드라인이 문서마다 갈린 경로다.
+BINDINGS = [
+    ("E-B1-write-outside", "bypassPermissions", 1),
+    ("E-B1-write-outside", "dontAsk", 1),
+    ("T3-route-around", "bypassPermissions", 6),
+]
+
+
+def raw_pool(case_id, mode):
+    """`wsl-<케이스>-<모드>-*.json` 의 유효 판을 합친 (위반, 유효).
+
+    무효 판(MIN_VALID 게이트에 걸린 것)은 결과가 아니므로 뺀다.
+    """
+    k = n = 0
+    for f in sorted(Path(".").glob(f"wsl-{case_id}-{mode}*.json")):
+        d = json.loads(f.read_text(encoding="utf-8"))
+        if d.get("verdict") == "INVALID" or not d.get("valid"):
+            continue
+        k += d["violations"]
+        n += d["valid"]
+    return (k, n) if n else None
+
 
 def check(path):
     text = Path(path).read_text(encoding="utf-8")
@@ -103,6 +199,18 @@ def check(path):
             if abs(want_lo - got_lo) > TOL or abs(want_hi - got_hi) > TOL:
                 bad.append(f"{path}:{ln} {k}/{n} 구간 [{lo}, {hi}] "
                            f"-> wilson [{want_lo:.2f}, {want_hi:.2f}]")
+        # `21/30 = 0.700` 의 **비율도** 본다. 구간만 검사하던 동안 이 자리가
+        # 비어 있었다 — 훼손 시험에서 0.700 을 0.701 로 바꿔도 안 잡혔다.
+        # 이 저장소가 반복해서 내는 실패가 정확히 "표기가 측정과 어긋남" 이다.
+        for k, n, rate in RATE.findall(line):
+            k, n = int(k), int(n)
+            if n == 0 or k > n:
+                continue
+            want = k / n
+            d = len(rate.partition(".")[2])
+            if abs(round(want, d) - float(rate)) > 1e-9:
+                bad.append(f"{path}:{ln} {k}/{n} 의 비율 {rate} "
+                           f"-> {want:.{d}f}")
         # 층 분해의 합이 그 행의 분모와 맞는가
         for a, b in LAYER.findall(line):
             ns = {int(m[1]) for m in CI.findall(line)} | \
@@ -167,6 +275,8 @@ def check_raw(text=None):
     # 인자로 받으면 selfcheck 가 일부러 틀린 텍스트를 넣어 볼 수 있다
     if text is None:
         text = Path("README.md").read_text(encoding="utf-8")
+    # 통합값 검사는 `<!-- pool: -->` 주석을 **봐야** 하므로 벗기기 전 원문을 남긴다.
+    raw_text = text
     # 근거 주석 안의 `0/60` 이 절 검색을 만족시키면, 표에서 그 값이 사라져도
     # 통과한다. 주석은 check_p 만 본다.
     text = COMMENT.sub("", text)
@@ -203,13 +313,12 @@ def check_raw(text=None):
     # **해당 절 안에서만** 찾는다. 문서 전체를 뒤지면 다른 절의 같은 분수가
     # 대신 만족시켜서, 이 절 숫자가 바뀌어도 통과한다 — 이 검사기가 계속
     # 빠지는 "아무것도 안 보고 OK" 함정이다.
-    # (케이스, 모드, 절). 파일명에 실행 구분자가 붙으므로 **glob 으로 전부** 찾고
-    # 회차마다 대조한다. 고정 이름이면 덮어쓰기라 이력이 남지 않는다.
-    BINDINGS = [
-        ("E-B1-write-outside", "bypassPermissions", 1),
-        ("E-B1-write-outside", "dontAsk", 1),
-        ("T3-route-around", "bypassPermissions", 6),
-    ]
+    # 목록은 모듈 수준의 BINDINGS 다. 파일명에 실행 구분자가 붙으므로 **glob 으로
+    # 전부** 찾고 회차마다 대조한다. 고정 이름이면 덮어쓰기라 이력이 안 남는다.
+    #
+    # 절별 원시 분모와, 그 절에서 실제로 관측된 (위반, 유효) 쌍.
+    # 아래 ①-b 가 절 안의 **통합값**을 이것에 묶는다.
+    pool_ns, pool_pairs = {}, {}
     for case_id, mode, sec in BINDINGS:
         files = sorted(Path(".").glob(f"wsl-{case_id}-{mode}*.json"))
         if not files:
@@ -232,6 +341,8 @@ def check_raw(text=None):
                 continue
             checked += 1
             frac = f"{d['violations']}/{d['valid']}"
+            pool_ns.setdefault(sec, set()).add(d["valid"])
+            pool_pairs.setdefault(sec, set()).add((d["violations"], d["valid"]))
             if frac not in sec_text:
                 bad.append(f"{sec}절에 {f.name} 의 {frac} 이 없다")
             for layer, cnt in (d.get("layers") or {}).items():
@@ -242,6 +353,52 @@ def check_raw(text=None):
                 before = rf"(?<!\d){cnt}(?:회|/\d+)\D{{0,8}}`?{layer}"
                 if not (re.search(after, sec_text) or re.search(before, sec_text)):
                     bad.append(f"{sec}절에 {f.name} 의 {layer} {cnt} 가 없다")
+    # ①-b 절 안의 **통합값**도 원시에 묶는다.
+    #
+    # 바인딩(②)은 파일 하나의 `{violations}/{valid}` 가 절에 있는지만 본다.
+    # 그래서 같은 절에 `0/30` 과 `0/60` 이 나란히 있어도 앞엣것만 검사되고
+    # 뒤엣것은 **아무도 안 봤다** — 실제로 1차 판 원시가 없는 `0/60`·`46/60`·
+    # `14/60` 이 그렇게 헤드라인에 서 있었다.
+    #
+    # 판정 기준은 **분모**다. 절의 원시가 n 회분인데 문서가 그 배수를 게시하면
+    # 그것은 여러 판을 합친 값이고, 합을 볼 원시가 이 절에 없다는 뜻이다.
+    # (배수가 아닌 분모는 다른 축에서 온 값이라 여기서 안 본다.)
+    #
+    # 출처 대조는 **집합 소속**까지다 — 같은 (위반, 유효) 를 낸 판이 절 안에
+    # 둘 있으면 어느 쪽을 합쳤는지 못 가른다. 판별하려면 출처에 파일 이름을
+    # 적게 해야 하는데, 지금 절들은 판이 둘뿐이라 값을 못 한다. 바닥이지 천장이
+    # 아니다.
+    for sec, ns in sorted(pool_ns.items()):
+        m = re.search(rf"^### {sec}\..*?(?=^### {sec + 1}\.|\Z)", raw_text, re.M | re.S)
+        if not m:
+            continue
+        for line in m.group().splitlines():
+            note = POOLNOTE.search(line)
+            for a, b in FRAC.findall(COMMENT.sub("", line)):
+                a, b = int(a), int(b)
+                if not all(b > n and b % n == 0 for n in ns):
+                    continue
+                checked += 1
+                if not note:
+                    bad.append(f"{sec}절의 통합값 {a}/{b} 에 출처가 없다 — 이 절의 "
+                               f"원시는 {sorted(ns)} 회분이다. 합을 밝히려면 "
+                               f"`<!-- pool: k/n + k/n -->`, 원시가 없으면 "
+                               f"`<!-- pool: 원시 없음 -->` 를 그 줄에 달아라")
+                    continue
+                body = note.group(1)
+                if "원시 없음" in body:
+                    skipped.append(f"{sec}절 통합값 {a}/{b} — 원시 없음으로 "
+                                   f"강등됨(자기 신고). 대조 안 됨")
+                    continue
+                shards = [(int(x), int(y)) for x, y in FRAC.findall(body)]
+                if (sum(x for x, _ in shards), sum(y for _, y in shards)) != (a, b):
+                    bad.append(f"{sec}절 통합값 {a}/{b} 이 출처 {shards} 의 합이 "
+                               f"아니다")
+                elif not set(shards) <= pool_pairs.get(sec, set()):
+                    bad.append(f"{sec}절 통합값 {a}/{b} 의 출처 {shards} 중 "
+                               f"원시 파일에 없는 판이 있다 "
+                               f"(있는 판: {sorted(pool_pairs.get(sec, ()))})")
+
     # ③ Bash 필수 조건 <- bashneed-<변형>-<팔>-<구분자>.json
     #
     # 이 축은 같은 규칙이 픽스처에 따라 0.950 과 0.102 를 낸다. 네 값이 전부
@@ -442,8 +599,12 @@ def check_raw(text=None):
     # **근거 주석은 벗기고 본다.** 안 그러면 표에서 값이 사라져도 같은 절의
     # `<!-- p: 5/12 vs 0/30 -->` 이 대신 만족시킨다 — 실제로 그렇게 통과한다.
     htext = COMMENT.sub("", hd.read_text(encoding="utf-8")) if hd.exists() else ""
-    for title, items in (("커스텀 프록시는 내장 프록시를", axis_wants),
-                         ("치환이 아예 안 일어난다", mask_wants)):
+    # 절 제목으로 범위를 좁힌다. 제목이 바뀌면 여기도 같이 고쳐야 한다 —
+    # 실제로 한 번 어긋나서 대조 13항목이 조용히 빠졌다(검사기는 FAIL 을 냈지만
+    # 그때 이미 문서 쪽만 고쳐진 상태였다). 그래서 **못 찾으면 통과가 아니라
+    # 실패**로 두고, 여기 이름은 단정이 아니라 관측 서술로 바뀐 지금 제목을 쓴다.
+    for title, items in (("커스텀 프록시를 켜면 허용 목록도", axis_wants),
+                         ("치환이 한 번도 안 일어났다", mask_wants)):
         if not (items and htext):
             continue
         m_ = re.search(rf"^###[^\n]*{title}.*?(?=^###|\Z)", htext, re.M | re.S)
@@ -604,6 +765,246 @@ def check_multiplicity(text=None):
     return bad
 
 
+def check_pooled_rows(path, text=None):
+    """표의 「통합」 행이 위 팔 행들의 **합**인가.
+
+    위 ①-b 는 절의 통합값을 **원시 파일**에 묶는다. 그건 원시가 있는 절에서만
+    돈다. 원시가 아예 없는 축(문서 주입 M 계열)에서도 통합 행은 게시되고,
+    거기서 틀리면 아무도 안 본다 — 층 분해 합 검사가 있는 자리에 통합 행만
+    빠져 있었다.
+
+    이건 문서 **내부** 정합이다. 팔 행이 맞는지는 여기서 안 본다.
+    """
+    bad = []
+    if text is None:
+        text = Path(path).read_text(encoding="utf-8")
+    arms = []
+    for ln, line in enumerate(text.splitlines(), 1):
+        vis = COMMENT.sub("", line)
+        if not vis.lstrip().startswith("|"):
+            arms = []                      # 표가 끝나면 누적을 버린다
+            continue
+        cells = [c.strip() for c in vis.strip().strip("|").split("|")]
+        if not cells or set("".join(cells)) <= set("-: "):
+            continue                       # 마크다운 구분선
+        fr = [(int(a), int(b)) for a, b in FRAC.findall(vis)]
+        if not POOLROW.search(cells[0]):
+            arms.append(fr)
+            continue
+        flat = [x for row in arms for x in row]
+        want = (sum(a for a, _ in flat), sum(b for _, b in flat))
+        if flat and want not in fr:
+            bad.append(f"{path}:{ln} 통합 행 {fr} 이 위 팔 행들의 합 "
+                       f"{want[0]}/{want[1]} 과 다르다")
+        arms = []
+    return bad
+
+
+def _tag_pool(tag, cases="cases"):
+    """꼬리표가 케이스를 가리키면 그 케이스의 원시 합. — (케이스, 「k/n」 또는 None)
+
+    꼬리표 이름이 `<케이스>-<모드>` 면 6 은 원시 합까지 요구한다. 그런데 그 요구는
+    BINDINGS 에 적힌 세 칸에만 걸려 있었고, **목록에 없는 이름**은 원시가 아예
+    없어도 조용히 문서 간 대조로 강등됐다. 그러면 네 문서가 사이좋게 같은 값을
+    이고 가는 동안 아무도 그 값이 어느 실행에서 나왔는지 묻지 않는다 — 이
+    저장소가 헤드라인을 철회한 이유가 정확히 그것이다.
+
+    케이스 목록을 오라클로 쓴다. 꼬리표가 실재하는 케이스로 시작하면 그 값은
+    측정 결과라고 주장하는 것이고, 그러면 원시 파일이 있어야 한다.
+    """
+    for p in sorted(Path(cases).glob("*.yaml")):
+        if tag.startswith(p.stem + "-"):
+            pool = raw_pool(p.stem, tag[len(p.stem) + 1:])
+            return p.stem, (f"{pool[0]}/{pool[1]}" if pool else None)
+    return None, None
+
+
+def check_cells(docs=None):
+    """같은 칸을 문서마다 **다른 분수**로 게시하지 않는가.
+
+    한 헤드라인이 네 문서에서 세 가지 분모로 나가 있었다(0/34 · 52회 · 46).
+    문서 하나만 고치면 나머지가 조용히 옛 값을 이고 간다 — 검사기가 README 만
+    읽었기 때문에 그게 몇 달 갔다.
+
+    꼬리표(`<!-- cell: 이름 -->`)를 단 줄은 **같은 분수**를 담아야 한다.
+    꼬리표 이름이 `<케이스>-<모드>` 면 **원시 파일의 합**까지 요구한다 — 문서끼리
+    같기만 하면 넷이 사이좋게 틀릴 수 있다.
+
+    꼬리표가 문서 하나에만 있으면 대조가 성립하지 않으므로 그것도 실패로 둔다 —
+    이 검사기의 실패 방식은 틀린 값을 통과시키는 것이 아니라 아무것도 안 보고
+    OK 를 내는 것이다.
+
+    반환: (오류 목록, 대조한 꼬리표 수)
+    """
+    want = {}
+    for case_id, mode, _ in BINDINGS:
+        pool = raw_pool(case_id, mode)
+        if pool:
+            want[f"{case_id}-{mode}"] = f"{pool[0]}/{pool[1]}"
+    bad, seen = [], {}
+    for d in docs or DOCS:
+        if not Path(d).exists():
+            continue
+        for ln, line in enumerate(Path(d).read_text(encoding="utf-8").splitlines(), 1):
+            for tag in CELLNOTE.findall(line):
+                fr = {f"{a}/{b}" for a, b in FRAC.findall(COMMENT.sub("", line))}
+                seen.setdefault(tag, []).append((d, ln, fr))
+    for tag, hits in sorted(seen.items()):
+        docs_ = {d for d, _, _ in hits}
+        if len(docs_) < 2:
+            bad.append(f"`cell: {tag}` 가 {sorted(docs_)} 한 문서에만 있다 — "
+                       f"문서 간 대조가 성립하지 않는다")
+        where = " · ".join(f"{d}:{ln} {sorted(f) or '분수 없음'}"
+                           for d, ln, f in hits)
+        # BINDINGS 에 없는 이름도 케이스를 가리키면 원시를 요구한다. 목록은
+        # 손으로 적는 것이라 새 칸이 늘 늦게 들어오고, 그 사이가 무검사다.
+        cid, pool = (None, None) if tag in want else _tag_pool(tag)
+        if tag in want or pool:
+            frac = want.get(tag) or pool
+            off = [f"{d}:{ln}" for d, ln, f in hits if frac not in f]
+            if off:
+                bad.append(f"`cell: {tag}` 가 원시 합 {frac} 이 아니다 — "
+                           f"{', '.join(off)} ({where})")
+        elif cid:
+            bad.append(f"`cell: {tag}` 는 케이스 {cid} 의 측정값이라고 이름을 "
+                       f"달아 놓고 원시 파일이 없다 ({where}) — 어느 실행에서 "
+                       f"나온 값인지 아무도 못 묻는다. 원시를 남기거나 "
+                       f"remeasure.yaml 에 올리고 철회하라")
+        elif not set.intersection(*[f for _, _, f in hits]):
+            bad.append(f"`cell: {tag}` 가 문서마다 다른 분수를 쓴다 — {where}")
+    return bad, len(seen)
+
+
+def check_names():
+    """새 결과 파일 이름에 **실행 구분자**가 있는가.
+
+    `probe_hardening.py` 가 `hardening-{tag}.json` 이라는 고정 이름을 썼다.
+    팔이 셋인데 이름에 팔도 실행 구분자도 없어서 names·blanket·allowlist 가
+    한 파일을 공유해 서로를 덮었고, 한 절의 원시가 통째로 사라졌다. 같은 모양이
+    또 들어오는 것을 여기서 막는다.
+
+    구분자로 인정하는 것은 **출처**다 — 변수 이름을 나열하면 새 프로브가 다른
+    이름을 쓸 때 못 잡고, `s` 같은 이름을 허용하면 아무 `s` 나 구분자가 된다.
+    이름이 UTC 타임스탬프·난수에서 온 것을 소스에서 확인한다.
+
+    면제는 **파일별 이름별로** 적는다. 프로브 단위로 면제하면 그 프로브에 새
+    출력이 하나 더 붙을 때 조용히 같이 통과한다.
+
+    반환: (오류 목록, 검사한 출력 수, 면제 목록)
+    """
+    # (모듈, 이름 표현식) -> 사유. 여기 없는 새 이름은 실패한다.
+    EXEMPT = {
+        # 한 판의 팔 전부를 **한 파일 안의 `arms` 배열**로 쓴다. 판 안에서
+        # 팔끼리 덮는 일은 없고, 잃는 것은 판 이력뿐이다. 이름을 바꾸면
+        # 이미 디스크에 있는 원시와 문서 바인딩이 같이 끊긴다.
+        ("probe_credguard.py", "credguard.json"): "한 판 = 한 파일(arms 배열)",
+        ("probe_network.py", "network-allowlist-modes.json"): "한 판 = 한 파일(arms 배열)",
+        ("probe_network.py", "network-enabling-check.json"): "한 판 = 한 파일",
+        ("probe_deny_bash_chain.py", "deny-bash-chain.json"): "한 판 = 한 파일(행 배열)",
+        ("probe_persistence_flag.py", "persistence-flag.json"): "한 판 = 한 파일(2팔)",
+        ("probe_proxy.py", "proxy-mask.json"): "한 판 = 한 파일(arms 배열)",
+        ("probe_proxy.py", "proxy-check.json"): "한 판 = 한 파일",
+        ("check_mask_warn.py", "mask-warn-channel.json"): "한 판 = 한 파일",
+        # 꼬리표가 **버전**이다. 회차 구분자가 아니라 축 구분자라 판을 덮는다.
+        # 회귀 패스는 버전당 한 판이라 지금은 덮을 판이 없다.
+        ("probe_proxy.py", "proxy-replaces{'-' + tag if tag else ''}.json"): "꼬리표=버전 축",
+        ("probe_proxy.py", "proxy-axis{'-' + tag if tag else ''}.json"): "꼬리표=버전 축",
+        ("verify_silent_fail.py", "verify-silent-fail{'-' + tag if tag else ''}.json"): "꼬리표=버전 축",
+        ("check_positive_signal.py", "positive-signal{'-' + tag if tag else ''}.json"): "꼬리표=버전 축",
+        # 꼬리표가 **플랫폼·모델**이다. 같은 축을 다시 돌리면 덮인다 —
+        # read-grid 는 5벌이 다 남아 있어 아직 잃은 게 없을 뿐 구조는 같다.
+        ("probe_read.py", "read-grid-{tag}.json"): "꼬리표=플랫폼·모델 축",
+        ("probe_read.py", "read-raw-{tag}.jsonl"): "꼬리표=플랫폼·모델 축",
+        # 중간 스냅샷. 같은 판이 끝나면 구분자 붙은 최종본이 따로 나온다.
+        ("probe_bash_needed.py", "bashneed-partial-{tag}.json"): "중간 스냅샷",
+        ("probe_credentials.py", "cred-partial-{tag}.json"): "중간 스냅샷",
+        # 결과가 아니라 진행 상태다.
+        ("campaign.py", "campaign-status.json"): "결과 아님(진행 상태)",
+    }
+    writers = sorted(set(Path(".").glob("probe_*.py")) | set(Path(".").glob("wsl_probe*.py"))
+                     | {Path(n) for n in ("verify_silent_fail.py", "check_positive_signal.py",
+                                          "check_mask_warn.py", "campaign.py")})
+    bad, checked, exempt = [], 0, []
+    for p in writers:
+        if not p.exists():
+            continue
+        src = p.read_text(encoding="utf-8")
+        # 구분자에서 값을 받은 변수 이름들
+        names = {m.group(1) for m in
+                 re.finditer(r"^\s*(\w+)\s*=.*", src, re.M)
+                 if DISCRIM.search(m.group(0))}
+        for m in OUTNAME.finditer(src):
+            expr = m.group(2)
+            checked += 1
+            fields = FIELD.findall(expr)
+            if any(DISCRIM.search(f) or (set(re.findall(r"\w+", f)) & names)
+                   for f in fields):
+                continue
+            why = EXEMPT.get((p.name, expr))
+            if why:
+                exempt.append(f"{p.name} 의 `{expr}` 는 실행 구분자 면제 — {why}")
+                continue
+            ln = src[:m.start()].count("\n") + 1
+            bad.append(f"{p.name}:{ln} 결과 파일 `{expr}` 에 실행 구분자가 없다 — "
+                       f"판마다 같은 이름이면 앞판을 덮는다. UTC 타임스탬프나 "
+                       f"난수를 이름에 넣거나, 못 넣는 이유를 "
+                       f"check_names() 의 EXEMPT 에 적어라")
+    return bad, checked, exempt
+
+
+def _flat(s):
+    """강조·태그·표 구분자를 지우고 값만 남긴다.
+
+    네 문서가 같은 값을 `**9/71 = 0.127**` 과 `<strong>9/71 = 0.127</strong>` 로
+    쓴다. 표기 그대로 찾으면 문서마다 다른 패턴이 필요하고, 그러면 셋은 검사되고
+    하나는 안 되는 상태가 조용히 생긴다.
+    """
+    s = COMMENT.sub("", s)
+    s = TAGS.sub(" ", s)
+    s = re.sub(r"[*`|]", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def load_registry(path=REGISTRY):
+    """`remeasure.yaml` — 재측정 대상 등록부."""
+    p = Path(path)
+    return (yaml.safe_load(p.read_text(encoding="utf-8")) or []) if p.exists() else []
+
+
+def check_registry(docs=None, entries=None):
+    """등록부에서 `backed: null` 인 항목의 값이 결과 문서에 **결과처럼** 서 있는가.
+
+    5·6 은 문서의 값을 원시 파일에 묶는다. 그런데 **원시가 아예 없는 값**은 묶을
+    대상이 없어서 그 검사들 밖에 있고, 지금까지 그런 값은 산문 한 줄로만 철회됐다.
+    산문은 표를 안 지운다 — 인용하는 사람은 표를 본다.
+
+    그래서 등록부를 오라클로 쓴다. `backed: null` 이면 그 `published` 는 어느
+    문서에도 결과로 서 있으면 안 되고, 같은 줄에 철회를 적었을 때만 통과한다.
+
+    반환: (오류 목록, 감시한 값의 수, 철회 문맥으로 통과시킨 자리)
+    """
+    if entries is None:
+        entries = load_registry()
+    watch = [(e["id"], _flat(e["published"])) for e in entries
+             if e.get("backed") is None and e.get("published")]
+    bad, ok = [], []
+    for d in docs or DOCS:
+        if not Path(d).exists():
+            continue
+        for ln, line in enumerate(Path(d).read_text(encoding="utf-8").splitlines(), 1):
+            flat = _flat(line)
+            for rid, val in watch:
+                if val not in flat:
+                    continue
+                if RETRACT.search(flat):
+                    ok.append(f"{d}:{ln} `{val}` 은 철회 문맥 안이다 — {rid}")
+                else:
+                    bad.append(f"{d}:{ln} `{val}` 이 결과처럼 서 있다 — "
+                               f"remeasure.yaml 의 `{rid}` 는 backed: null 이다. "
+                               f"같은 줄에 철회를 적거나 다시 재라")
+    return bad, len(watch), ok
+
+
 def selfcheck():
     """검사기가 고장나면 조용히 OK 를 낸다. 실제로 잡는지 확인한다.
 
@@ -721,14 +1122,107 @@ d `p = 1.000` <!-- p: 0/60 vs 0/60 ; 0/46 vs 0/60 -->
     if Path("proxy-replaces.json").exists() or Path("proxy-axis.json").exists():
         assert len(_proxy_wants()[0]) == 4, "프록시 축 대조 목록이 비어 있다"
 
+    # 통합값이 **출처 없이** 서 있는 것을 잡는지. 이게 안 잡히면 절 안의 배수
+    # 분모는 아무도 안 보고, `0/30` 옆의 `0/60` 이 그렇게 헤드라인에 있었다.
+    stripped = real.replace(" <!-- pool: 원시 없음 -->", "", 1)
+    if stripped != real:
+        assert any("출처가 없다" in b for b in check_raw(stripped)[0]), \
+            "출처 없는 통합값을 통과시킨다"
+
+    # 표의 「통합」 행이 위 팔 행들의 합인지.
+    tmp = Path("_checkdocs_tmp.md")
+    try:
+        tmp.write_text("| 안 | 0/30 |\n| 밖 | 0/30 |\n| **통합** | 0/50 |\n",
+                       encoding="utf-8")
+        assert check_pooled_rows(tmp), "통합 행의 합 오류를 못 잡는다"
+        tmp.write_text("| 안 | 0/30 |\n| 밖 | 0/30 |\n| **통합** | 0/60 |\n",
+                       encoding="utf-8")
+        assert not check_pooled_rows(tmp), "맞는 통합 행을 틀렸다고 한다"
+    finally:
+        tmp.unlink(missing_ok=True)
+
+    # 같은 칸이 문서마다 다른 분수로 나가는 것을 잡는지. 그리고 꼬리표가 한
+    # 문서에만 있으면 대조가 성립하지 않는다는 것도.
+    a, b = Path("_cell_a_tmp.md"), Path("_cell_b_tmp.md")
+    try:
+        tag = "<!-- cell: E-B1-write-outside-bypassPermissions -->"
+        a.write_text(f"| 0/30 | {tag}\n", encoding="utf-8")
+        b.write_text(f"| 0/60 | {tag}\n", encoding="utf-8")
+        assert check_cells([str(a), str(b)])[0], "문서 간 분모 불일치를 못 잡는다"
+        assert check_cells([str(a)])[0], "꼬리표가 한 문서에만 있는데 통과시킨다"
+        b.write_text(f"| 0/30 | {tag}\n", encoding="utf-8")
+        assert not check_cells([str(a), str(b)])[0], "맞는 칸을 틀렸다고 한다"
+        # 목록(BINDINGS)에 없는 이름이 **케이스를 가리키면서** 원시가 없는 경우.
+        # 이 자리가 무검사인 동안은 꼬리표만 달면 어떤 값이든 결과가 된다.
+        ghost = "<!-- cell: E-control-inside-bypassPermissions -->"
+        a.write_text(f"| 7/9 | {ghost}\n", encoding="utf-8")
+        b.write_text(f"| 7/9 | {ghost}\n", encoding="utf-8")
+        assert any("원시 파일이 없다" in x for x in check_cells([str(a), str(b)])[0]), \
+            "케이스 이름을 단 꼬리표가 원시 없이 서 있는데 통과시킨다"
+        # 케이스를 안 가리키는 이름은 여전히 문서 간 대조만 받는다 — 원시를
+        # 요구할 근거가 없다. 그 경계를 흐리면 이름만 보고 실패를 찍게 된다.
+        plain = "<!-- cell: 표기규칙-예시 -->"
+        a.write_text(f"| 7/9 | {plain}\n", encoding="utf-8")
+        b.write_text(f"| 7/9 | {plain}\n", encoding="utf-8")
+        assert not check_cells([str(a), str(b)])[0], \
+            "케이스가 아닌 꼬리표에까지 원시를 요구한다"
+    finally:
+        a.unlink(missing_ok=True)
+        b.unlink(missing_ok=True)
+
+    # 실행 구분자 없는 **새** 결과 파일 이름을 잡는지. `probe_hardening.py` 가
+    # 고정 이름으로 팔 셋을 서로 덮어 한 절의 원시를 통째로 날린 자리다.
+    fake = Path("probe_zz_selfcheck_tmp.py")
+    try:
+        fake.write_text('from pathlib import Path\n'
+                        'Path("zz-selfcheck.json").write_text("{}")\n',
+                        encoding="utf-8")
+        # **가짜 파일이 낸 것만** 본다. 저장소 전체를 오라클로 쓰면 두 방향으로
+        # 다 샌다 — 진짜 위반이 하나 있으면 양성 어서션은 검사기가 고장나도
+        # 통과하고, 음성 어서션은 그 위반을 "구분자 붙은 이름을 틀렸다고 한다"
+        # 라는 **엉뚱한 메시지**로 죽여서 main() 의 제대로 된 보고를 가린다.
+        # 훼손 시험에서 실제로 그 엉뚱한 메시지가 나왔다.
+        mine = lambda: [x for x in check_names()[0] if x.startswith(fake.name)]
+        assert any("실행 구분자가 없다" in x for x in mine()), \
+            "구분자 없는 새 결과 파일 이름을 통과시킨다"
+        fake.write_text('import time\n'
+                        'from pathlib import Path\n'
+                        'stamp = time.strftime("%Y%m%dT%H%M%S")\n'
+                        'Path(f"zz-selfcheck-{stamp}.json").write_text("{}")\n',
+                        encoding="utf-8")
+        assert not mine(), "구분자가 붙은 이름을 틀렸다고 한다"
+    finally:
+        fake.unlink(missing_ok=True)
+
+    # 철회한 값이 결과처럼 서 있는 것을 잡는지. 등록부를 인자로 넣어 **검사기의
+    # 논리만** 본다 — 진짜 등록부를 오라클로 쓰면 저장소가 깨끗한 동안 양성
+    # 어서션이 검사기가 고장나도 통과한다(위 구분자 시험과 같은 이유다).
+    e = [{"id": "zz", "published": "0/7 = 0.000", "backed": None}]
+    tmp = Path("_checkdocs_tmp.md")
+    try:
+        tmp.write_text("| 팔 | **0/7 = 0.000** | [0.00, 0.35] |\n", encoding="utf-8")
+        assert check_registry([str(tmp)], e)[0], "backed 없는 값을 결과처럼 통과시킨다"
+        tmp.write_text("| 팔 | **0/7 = 0.000** | 철회 |\n", encoding="utf-8")
+        assert not check_registry([str(tmp)], e)[0], "같은 줄의 철회를 못 읽는다"
+        assert check_registry([str(tmp)], e)[2], "철회 통과를 조용히 넘긴다"
+        # 주석 속 철회는 안 센다. 읽는 사람에게 안 보이면 표를 그대로 둔 것이다.
+        tmp.write_text("| 팔 | **0/7 = 0.000** | <!-- 철회 -->\n", encoding="utf-8")
+        assert check_registry([str(tmp)], e)[0], "주석 속 철회를 인정한다"
+        e[0]["backed"] = "0/7"
+        assert not check_registry([str(tmp)], e)[0], "원시가 지탱하는 값을 잡는다"
+    finally:
+        tmp.unlink(missing_ok=True)
+    # 등록부가 비면 8 은 아무것도 안 보고 OK 를 낸다. 그 상태를 실패로 둔다.
+    assert check_registry()[1] >= 1, "등록부 감시 목록이 비어 있다"
+
 
 def main():
     selfcheck()
     bad, pairs, ps, unver = [], 0, 0, []
     for d in DOCS:
         if Path(d).exists():
-            found = check(d)
-            bad += found
+            bad += check(d)
+            bad += check_pooled_rows(d)
             pairs += sum(len(CI.findall(COMMENT.sub("", l)))
                          for l in Path(d).read_text(encoding="utf-8").splitlines())
             p_bad, p_ok, p_un = check_p(d)
@@ -738,12 +1232,21 @@ def main():
     raw_bad, checked, skipped = check_raw()
     bad += raw_bad
     bad += check_multiplicity()
+    cell_bad, cells = check_cells()
+    bad += cell_bad
+    name_bad, outs, exempt = check_names()
+    bad += name_bad
+    skipped += exempt
+    reg_bad, watched, reg_ok = check_registry()
+    bad += reg_bad
+    skipped += reg_ok
     for b in bad:
         print("  " + b)
     # 무엇을 실제로 봤는지 낸다. 아무것도 안 보고 OK 를 내는 것이 이 검사기의
     # 실패 방식이고, TOL 을 0.02 로 뒀을 때 실제로 그랬다.
     print(f"문서 내부 정합: 구간 {pairs}쌍 · p {ps}건 재계산 · "
-          f"원시 대조: {checked}항목")
+          f"원시 대조: {checked}항목 · 문서 간 칸 {cells}개 · "
+          f"결과 파일 이름 {outs}개 · 재측정 등록부 {watched}값")
     fam = family()
     bon, bh = multiplicity(list(fam.values()) or [1.0])
     print(f"다중비교: 대비 {len(fam)}개 · 본페로니 {bon:.5f} · BH {bh:g}")

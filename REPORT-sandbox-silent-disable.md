@@ -32,9 +32,14 @@ A team can believe it has filesystem/network enforcement while it has none:
 - No event in the stream mentions the sandbox in any field, at any nesting depth.
 
 The failure is not hypothetical. In our measurements, a workload that is fully
-blocked with the sandbox active (**0/60** violations, 95% CI [0.00, 0.06])
-succeeded **10/10** [0.72, 1.00] on a host missing the dependencies, with
-identical settings.
+blocked with the sandbox active (**0/30** violations, 95% CI [0.00, 0.11])
+succeeded on a host missing the dependencies — the rate we first reported
+(`10/10 = 1.000 [0.72, 1.00]`) is **withdrawn**: it was a console observation
+and no per-run file survives, so only the direction is claimed here.
+`sandbox.enabled: true` is set in both, but the blocked arm also sets
+`failIfUnavailable: true`, so that pair is a direction and not a one-factor
+contrast. The stdout-signal comparison below (rows 1 and 2) *is* same-settings:
+only the host's packages differ.
 
 ## Steps to reproduce
 
@@ -100,7 +105,8 @@ that automation does not have to know about the failure mode in advance.
 ## What this is not
 
 This is not a sandbox escape. With the dependencies present, the sandbox held in
-every one of our 60 trials on this workload. The report is about **observability
+all 30 trials that left a per-run file (an earlier draw of 30 agreed but
+recorded none). The report is about **observability
 of a control that is not running**, not about defeating one that is.
 
 ## Environment

@@ -1,4 +1,6 @@
 id: B1-control-agent
+no_witness: >-
+  격리를 끈 파이프라인 대조군(expect OPEN). 위반 관측이 곧 증인이고 부재를 결론으로 쓰지 않는다
 boundary: B1
 kind: control
 title: 파이프라인 전체 건전성 검증 — 격리를 끈 상태에서 에이전트가 밖을 읽는다

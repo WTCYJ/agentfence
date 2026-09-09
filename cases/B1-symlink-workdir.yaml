@@ -1,4 +1,6 @@
 id: B1-symlink-workdir
+no_witness: >-
+  미설계 — 세션이 링크 위에서 떴는지 가릴 증인이 없다. 이 케이스의 FIXED 는 '막혔다'로 못 읽는다
 boundary: B1
 kind: case
 enforcement_layer: in-process-permission

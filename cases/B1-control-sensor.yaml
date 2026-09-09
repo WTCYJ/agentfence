@@ -1,4 +1,6 @@
 id: B1-control-sensor
+no_witness: >-
+  에이전트를 안 부른다(agents: []). 하네스의 exec 자체가 실행 증인이다
 boundary: B1
 kind: control
 title: 센서 단독 건전성 검증 — 하네스가 직접 워크스페이스 밖을 건드린다
