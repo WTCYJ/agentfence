@@ -42,6 +42,7 @@ import secrets
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import probe_read
@@ -80,6 +81,27 @@ DENY_SETS = {
 
 class Fatal(RuntimeError):
     """재시도로 풀리지 않는 조건. 회차가 아니라 **실행**을 끝낸다."""
+
+
+# 유효 회차가 이 비율에 못 미치면 그 팔은 **안 끝난 것**이다. campaign 의
+# `finished()` 가 같은 문턱을 쓰므로 상수를 한 벌만 둔다 — 갈리면 프로브는
+# 끝났다 하고 재개는 아니라고 해서 같은 판이 무한히 다시 돈다.
+MIN_VALID = 0.7
+
+_VERSION = None
+
+
+def version():
+    """CLI 버전을 판당 한 번만 읽는다.
+
+    import 시점에 부르면 이 파일을 import 하는 것만으로 바이너리가 돈다 —
+    Fatal 하나를 얻으려고 import 하는 프로브가 이미 둘이다.
+    """
+    global _VERSION
+    if _VERSION is None:
+        import runner
+        _VERSION = runner.agent_version()
+    return _VERSION
 
 
 def deny_name(deny):
@@ -240,7 +262,7 @@ def one_run(deny, framing="neutral", model="sonnet"):
     return {"outer": got_outer, "inner": got_inner} if ok else {"invalid": why}
 
 
-def arm(label, deny, n, framing="neutral", budget=None):
+def arm(label, deny, n, framing="neutral", budget=None, model="sonnet"):
     """이 팔을 최대 `budget` 회차만 돌리고 나온다. `None` 이면 옛날처럼 끝까지.
 
     회차 단위 인터리빙(`campaign.py`)을 하려면 **끊었다 이어 붙일 수 있어야**
@@ -275,21 +297,27 @@ def arm(label, deny, n, framing="neutral", budget=None):
         # **모드를 기록한다.** 파일명만으로는 못 가른다 — 기존 dontAsk 판의
         # 이름을 유지해야 재개가 이어지므로 이름에 모드를 안 넣었다.
         # **시드도 기록한다.** 팔 순서를 섞었으면 그 순서가 재현돼야 한다.
+        # **모델과 CLI 버전도 적는다.** 팔 순서를 섞어 시점 교란을 퍼뜨려
+        # 놓고도 그 판이 어느 버전이었는지는 파일에 없었다 — 지금까지의
+        # cred-*.json 열두 벌 전부가 그 상태다.
         return {"label": label, "deny": deny, "framing": framing, "n": n,
-                "mode": MODE, "order_seed": SEED, "got": got, "valid": tries,
+                "mode": MODE, "model": model, "agent_version": version(),
+                "order_seed": SEED, "got": got, "valid": tries,
                 "ctrl": ctrl, "invalid": bad}
 
     def stamped():
         # 중단이 전손이 되지 않게, 나가는 길목마다 남긴다.
-        s = subprocess.run(["date", "-u", "+%Y%m%dT%H%M%S"],
-                           capture_output=True, text=True).stdout.strip()
+        # 구분자는 표준 라이브러리로 만든다. 외부 `date` 가 없거나 빈 문자열을
+        # 내면 이름이 `cred-<tag>-.json` 이라는 **고정 이름**이 되어 앞판을
+        # 덮는다 — 고치려던 그 고장으로 되돌아간다.
+        s = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
         Path(f"cred-{tag}-{s}.json").write_text(
             json.dumps(snap(), ensure_ascii=False, indent=1), encoding="utf-8")
 
     spent = 0
     while tried < n and (budget is None or spent < budget):
         try:
-            r = one_run(deny, framing)
+            r = one_run(deny, framing, model)
         except Fatal:
             print(f"    ... {label} {tries}회에서 중단(재시도 무의미)", flush=True)
             part.write_text(json.dumps(snap(), ensure_ascii=False, indent=1),
@@ -320,7 +348,10 @@ def arm(label, deny, n, framing="neutral", budget=None):
     # 예산으로 잘린 회차는 위 10 회 간격에 안 걸릴 수 있다. 나가기 전에 한 번 더.
     part.write_text(json.dumps(snap(), ensure_ascii=False, indent=1),
                     encoding="utf-8")
-    if tried < n:
+    # 시도를 다 썼어도 **유효가 문턱에 못 미치면 끝난 것이 아니다.** 그 상태로
+    # 최종 파일을 찍으면, campaign 이 계속 pending 으로 보는 팔에서 재개할
+    # 때마다 회차를 하나도 안 돌고 같은 내용의 파일이 하나씩 쌓인다.
+    if tried < n or tries < n * MIN_VALID:
         return None                      # 예산만 썼다. 이 팔은 아직 안 끝났다.
     # **최종값을 실행 구분자와 함께 반드시 남긴다.** 중간 저장만 두면 마지막
     # 회차가 무효일 때 파일이 출력값보다 뒤처지고, 고정 이름은 판을 덮어쓴다.

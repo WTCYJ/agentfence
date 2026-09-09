@@ -1,3 +1,16 @@
+SCOPE — READ FIRST
+
+The MIT license below applies to this repository EXCEPT for the files listed
+in ./NOTICE, which are derived from third-party sources under their own terms.
+In particular, dataset/survey/normalized/cipr.yaml is offered only under the
+PolyForm Noncommercial License 1.0.0 and is NOT sublicensed under MIT.
+Nothing below grants any right the copyright holder does not hold.
+
+아래 MIT 는 이 저장소에 적용되되, `NOTICE` 에 열거한 외부 유래 파일은 제외한다.
+특히 `dataset/survey/normalized/cipr.yaml` 은 MIT 가 아니다.
+
+--- MIT license (unmodified) begins here ---
+
 MIT License
 
 Copyright (c) 2026 WTCY

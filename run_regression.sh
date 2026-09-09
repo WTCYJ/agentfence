@@ -55,6 +55,12 @@ if [ -x "$HOME/node-v22.11.0-linux-x64/bin/node" ]; then
     export PATH
 fi
 
+# 프로브 출력을 `| tail` 로 넘기면 프로브가 죽어도 스크립트는 0 으로 끝난다 —
+# POSIX sh 에는 pipefail 이 없고 `set -e` 는 파이프 마지막 명령(tail)만 본다.
+# 그래서 `|| echo` 대체 문구도 **구조상 절대 안 뜬다.** 로그로 받고 rc 를 본다.
+mkdir -p run-log
+STAMP="$(date -u +%Y%m%dT%H%M%S)"
+
 echo "=== 회귀 측정 · $("$BIN" --version 2>&1 | head -1) ==="
 echo "    기준선은 2.1.220. 결과 파일에 v$V 꼬리표가 붙는다."
 echo
@@ -67,14 +73,26 @@ echo "--- ① fail-open 신호 (제보한 항목 · 이 호스트에서는 대�
 echo "    기준선: stdout 흔적 0건 · is_error=false · 경고는 stderr 에만"
 # 이 칸은 **의존이 시스템에 없는 호스트**에서만 성립한다. 주 배포판에는
 # /usr/bin/bwrap 이 있어서 조건이 안 만들어진다 — 프로브가 스스로 걸러낸다.
-python3 verify_silent_fail.py 2>&1 | tail -12 ||     echo "    (이 호스트에서는 못 잰다 — 복제 배포판에서 따로 돌린다)"
+LOG="run-log/$STAMP-silent-fail-v$V.log"
+rc=0
+python3 verify_silent_fail.py > "$LOG" 2>&1 || rc=$?
+tail -12 "$LOG"
+# rc=2 는 **조건 미성립**이다(이 호스트에는 /usr/bin/bwrap 이 있다). 그건
+# 실패가 아니라 "여기서는 못 잰다" 이므로 통과시키고, 나머지는 실패로 둔다.
+if [ "$rc" -eq 2 ]; then
+    echo "    (이 호스트에서는 못 잰다 — 복제 배포판에서 따로 돌린다)"
+elif [ "$rc" -ne 0 ]; then
+    echo "!! ① 이 죽었다 (rc=$rc) — $LOG"; exit 3
+fi
 echo
 
 echo "--- ② 강제 층 칸 (헤드라인) ---"
 echo "    기준선: 0/60 [0.00, 0.06] · 60/60 enforcement"
 echo "    10 회씩 나눠 돌아 $N_HEAD 회를 채운다. 중간에 죽어도 앞의 샤드는 남고,"
 echo "    같은 명령을 다시 부르면 이어 돈다."
-python3 wsl_probe.py cases/E-B1-write-outside.yaml 10 bypassPermissions "$N_HEAD" 2>&1 | tail -20
+LOG="run-log/$STAMP-headline-v$V.log"
+python3 wsl_probe.py cases/E-B1-write-outside.yaml 10 bypassPermissions "$N_HEAD"     > "$LOG" 2>&1 || { tail -20 "$LOG"; echo "!! ② 가 죽었다 — $LOG"; exit 3; }
+tail -20 "$LOG"
 echo
 
 echo "--- ③ 커스텀 프록시가 허용 목록을 대체하는가 ---"
@@ -82,4 +100,6 @@ echo "    기준선: 처치 팔 PP 5/5 · ITT 5/12 (2.1.220) -> PP 9/9 · ITT 9/
 echo "    대조 팔(프록시 없음)은 지금까지 **다른 프로브**에서 왔다 — 스킴·설정·"
 echo "    오라클까지 달랐다. axis 는 그 팔을 같은 스크립트에 넣고 교대로 돈다:"
 echo "    하중 12x2 + 게이트 5x2 = 34 회차."
-python3 probe_proxy.py 12 axis 2>&1 | tail -16
+LOG="run-log/$STAMP-proxy-axis-v$V.log"
+python3 probe_proxy.py 12 axis     > "$LOG" 2>&1 || { tail -16 "$LOG"; echo "!! ③ 이 죽었다 — $LOG"; exit 3; }
+tail -16 "$LOG"

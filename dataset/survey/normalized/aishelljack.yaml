@@ -7,6 +7,17 @@
 # 원문 명령(executor.command)은 여기 없다. 라이선스 문제가 아니라 —
 # Apache-2.0 은 재배포를 허용한다 — 실동작 ATT&CK 명령 314개를 저장소에
 # 넣을 이유가 없어서다. upstream_id(id 필드)로 raw/aishelljack 에서 되찾는다.
+#
+# 표시 — 이 줄들은 이 파일 사본과 함께 가야 한다.
+#   AIShellJack replication package / https://doi.org/10.6084/m9.figshare.30111988 (v4)
+#   arXiv:2509.22040
+#   라이선스가 갈린다: 동봉 LICENSE 는 Apache-2.0, figshare 아티클 메타는 CC BY 4.0.
+#   더 구체적인 동봉본(Apache-2.0)을 따르되 양쪽을 다 밝힌다. 무보증.
+#   CC BY 쪽을 따를 때의 표시: 동봉 패키지에 저작권 표시 줄이 없어 위 DOI 로 대신한다
+#   (3(a)(1)(a) 는 "제공된 경우 유지"이고, 제공된 것이 없다).
+#   개작함: 314 건에서 식별자·기법·실행기·의존성 유무만 추출. 실행 명령 미포함.
+#   기법 목록의 test_guid 는 Atomic Red Team 상류로 보이나 그 라이선스 근거를
+#   확보한 파일 안에서 못 찾았다 — NOTICE 5 절에 미해결로 올려 두었다.
 
 meta:
   name: AIShellJack replication package (payloads + injection framework)

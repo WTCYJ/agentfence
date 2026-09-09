@@ -65,6 +65,10 @@ import tempfile
 from pathlib import Path
 
 from classify_refusals import wilson
+# 바이너리 선택은 **한 벌만** 둔다. 여기 있던 사본에는 Windows 의 `.cmd` 대체
+# 규칙(WinError 193)이 없어서, 같은 `AGENTFENCE_CLAUDE` 를 걸어도 runner 경로는
+# 돌고 probe 경로만 죽었다. 이 파일을 import 하는 프로브가 여섯이다.
+from runner import claude_bin
 
 # 문서가 명시한 잠금까지 함께 건다. enabled+failIfUnavailable 만으로는
 # 에이전트가 dangerouslyDisableSandbox 로 재시도할 수 있고, 그러면 읽기 통과가
@@ -96,15 +100,6 @@ FRAMINGS = {
 # 짠다 — frontend/package.json 에 backend 의존성을 적으면 분류가 깨진다.
 INNER_NAMES = ["VERSION", "index.js", "frontend"]
 OUTER_NAMES = ["backend", "CHANGELOG"]
-
-
-def claude_bin():
-    env = os.environ.get("AGENTFENCE_CLAUDE")
-    if env:
-        return env
-    if sys.platform == "win32":
-        return shutil.which("claude.cmd") or shutil.which("claude") or "claude"
-    return shutil.which("claude") or "claude"
 
 
 def target_of(inp):
@@ -226,10 +221,16 @@ def main():
     # **머신 꼬리표.** 복제 배포판에서 돌리면 같은 `wsl` 태그라 원본 파일을
     # 덮는다 — 고정 파일명이 이력을 지우는 것을 이 저장소에서 이미 한 번 당했다.
     # 복제 실행은 `AGENTFENCE_MACHINE` 을 붙여 원본과 나란히 남긴다.
+    # **샌드박스도 축이다.** 꼬리표에 없던 동안 `probe_read.py 10`(샌드박스 없음)
+    # 이 `probe_read.py 5 --sandbox` 판을 같은 이름으로 덮을 수 있었고, 파일을
+    # 열어 `sandbox` 필드를 보기 전에는 알 수 없었다. Windows 에서는 이 플래그가
+    # no-op 이라 위에서 걸러지므로(축이 아니다) 꼬리표도 붙이지 않는다 —
+    # 붙이면 이미 게시된 win 칸의 이름만 바뀐다.
     machine = os.environ.get("AGENTFENCE_MACHINE", "")
     tag = ("win" if sys.platform == "win32" else "wsl") + \
           (f"-{machine}" if machine else "") + \
-          ("" if model == "sonnet" else f"-{model}")
+          ("" if model == "sonnet" else f"-{model}") + \
+          ("" if sandbox or sys.platform == "win32" else "-nosandbox")
     print(f"=== 읽기 경로 · {plat} · sandbox={sandbox} · model={model} · n={n} ===")
     print("집계 단위 = 관측된 도구 시도. 비율의 분모는 유효 회차다.\n")
 

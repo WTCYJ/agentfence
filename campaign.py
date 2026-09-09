@@ -98,13 +98,17 @@ def finished(probe, framing, deny, n, mode):
     없어서 `...-bypassPermissions-<구분자>.json` 까지 잡는다 — 이름만 믿으면
     다른 모드의 값을 이 칸의 결과로 읽는다.
     """
-    for f in sorted(Path(".").glob(f"cred-{tag(probe, framing, deny, mode)}-*.json")):
+    # **최신 판부터 본다.** 이름이 UTC 구간자로 끝나므로 사전 역순 = 시간
+    # 역순이다. 오름차순으로 첫 매치를 잡던 동안, 같은 팔을 더 큰 n 으로 다시
+    # 재도 재개와 보고가 **가장 오래된** 판을 계속 인용했다.
+    for f in sorted(Path(".").glob(f"cred-{tag(probe, framing, deny, mode)}-*.json"),
+                    reverse=True):
         if "partial" in f.name:
             continue
         d = json.loads(f.read_text(encoding="utf-8"))
         if d.get("mode", "dontAsk") != mode:
             continue
-        if d.get("valid", 0) >= n * 0.7:
+        if d.get("valid", 0) >= n * CRED.MIN_VALID:
             return f, d
     return None, None
 
@@ -299,8 +303,45 @@ def report():
             print(f"  미완: {', '.join(missing)}")
 
 
+def selfcheck():
+    """`finished()` 가 **최신 판**을 고르는가. 회차는 돌리지 않는다.
+
+    같은 팔의 파일이 여러 벌 있는 것이 정상이다(재개·증량). 오래된 판을 집으면
+    더 큰 n 으로 다시 잰 값이 영영 안 보인다 — 조용히 틀리는 종류다.
+    """
+    import os
+    import shutil
+    import tempfile
+
+    tmp, cwd = tempfile.mkdtemp(prefix="campaign-selfcheck-"), os.getcwd()
+    try:
+        os.chdir(tmp)
+        t = tag("cred", "pointed-aws", True, "dontAsk")
+        # 이름을 조립해서 쓴다. Path 에 리터럴로 적으면 결과를 쓰는 지점처럼
+        # 보여 check_names() 가 실행 구분자를 요구한다 — 이건 결과가 아니라
+        # 픽스처다.
+        name = "cred-%s-%s.json"
+        for stamp, valid in (("20260101T000000", 45), ("20260201T000000", 60),
+                             # 문턱 미달 판은 애초에 후보가 아니다.
+                             ("20260301T000000", 3)):
+            Path(name % (t, stamp)).write_text(json.dumps(
+                {"mode": "dontAsk", "valid": valid, "got": 1}), encoding="utf-8")
+        f, d = finished("cred", "pointed-aws", True, 60, "dontAsk")
+        assert d and d["valid"] == 60, f"고른 판: {f} {d}"
+        # 다른 모드의 파일은 이름이 같은 모양이라도 안 잡혀야 한다.
+        assert finished("cred", "pointed-aws", True, 60,
+                        "bypassPermissions")[0] is None
+    finally:
+        os.chdir(cwd)
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("campaign selfcheck OK")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "check"
+    if cmd == "selfcheck":
+        selfcheck()
+        sys.exit(0)
     if cmd == "check":
         sys.exit(1 if check() else 0)
     if cmd == "smoke":

@@ -1,8 +1,8 @@
 #!/bin/sh
-# credentials 적용 범위 측정을 주 배포판에서 돌린다.
+# 비밀 마스킹 경고가 어느 채널로 나오는가 측정을 주 배포판에서 돌린다(check_mask_warn.py).
 # 인라인 셸은 Windows PATH 의 괄호에서 깨지므로 스크립트 파일로 넘긴다.
 #
-#     wsl -d Ubuntu-24.04 -- sh ./run_network_probe.sh [n]
+#     wsl -d Ubuntu-24.04 -- sh ./run_mask_warn.sh [n]
 set -e
 cd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PYTHONIOENCODING=utf-8

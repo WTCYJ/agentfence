@@ -2,9 +2,12 @@
 
 ## 카테고리 1 · 프롬프트 인젝션 벤치마크
 
-- **AgentDojo** (NeurIPS 2024) — 사용자 태스크 97개, 보안 테스트 케이스 629개.
-  Workspace, Banking, Travel, Slack 4개 도메인의 상태 기반 시뮬레이션 환경.
-  benign utility, utility under attack, attack success rate 측정.
+- **AgentDojo** (NeurIPS 2024) — **논문 값**으로 사용자 태스크 97개, 보안 테스트
+  케이스 629개. 2026-09-09 조사가 `main` 소스를 직접 센 값은 user 86 /
+  injection 27 / 조합 567 이다(`dataset/survey/comparison.md` 본표 #5). 둘은
+  모순이 아니라 세는 판이 다르다 — 어느 쪽 값인지 붙여 적지 않으면 다음 사람이
+  둘을 대조할 수 없다. Workspace, Banking, Travel, Slack 4개 도메인의 상태 기반
+  시뮬레이션 환경. benign utility, utility under attack, attack success rate 측정.
 - **AgentDyn** (arXiv 2602.03117) — 실세계 에이전트 보안 시스템 대상
   동적 개방형 프롬프트 인젝션 벤치마크.
 - **AgentArmor**, **PromptArmor**, **Meta SecAlign**, **CaMeL(Defeating Prompt

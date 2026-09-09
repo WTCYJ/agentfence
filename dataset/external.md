@@ -31,14 +31,28 @@
 
 원 AgentDojo 는 제외했다. 도구가 인메모리 객체이고 판정이 그 객체 상태라
 OS 경계를 안 잰다(`comparison.md` 본표 #5 와 3.1 절). 대신 US AISI 의 Inspect Evals
-포트를 sparse 로 받았고, 샘플 1,014 개 중 컨테이너에서 실제로 도는 것은
-`workspace_plus-u40-i14` · `u41-i14` 두 조합뿐이다(전체의 0.2%,
-`normalized/inspect-evals-agentdojo.yaml`). `comparison.md` 본표 #20 은 같은 칸을
-"샌드박스 70" 이라 적는다 — 두 값이 어긋나고, 샘플 id 를 대는 정제본 쪽을 따랐다.
+포트를 sparse 로 받았다.
+
+앞 판은 여기서 "정제본은 2, `comparison.md` 본표 #20 은 70 — 두 값이 어긋나고
+정제본 쪽을 따랐다" 고 적었다. **그 판정이 틀렸다.** 상류 코드를 열어 보면 둘 다
+맞는 값이고 세는 대상이 다르다. `dataset.py:82` 는 사용자 과업과 인젝션 중
+**한쪽만** `REQUIRES_SANDBOX` 여도 컨테이너를 붙이고(`or`), `dataset.py:116`·`129`
+의 `with_sandbox_tasks="only"` 필터는 **양쪽 다** 요구한다(`and`).
+`workspace_plus` 는 사용자 42 × 인젝션 15 = 630 이고 `REQUIRES_SANDBOX=True` 는
+사용자 둘(`UserTask40` · `UserTask41`)과 인젝션 하나(`InjectionTask14`)다. 따라서
+
+- 컨테이너가 붙는 샘플 **70** = 630 − 40×14 (본표 #20 의 값)
+- `only` 필터가 남기는 조합 **2** = 2×1 (정제본의 값)
+- 그중 OS 경계를 노리는 인젝션이 든 것 **42** = `InjectionTask14` × 사용자 42
+
+셋을 갈라 적었다. 정제본이 실제로 틀렸던 것은 다른 문장이다 — "나머지 1,012 건은
+도커 없이" 라고 적었는데 도커 없이 도는 것은 944 건(1,014 − 70)이다. 고쳤다.
 
 앞 판이 옮겨 적은 "사용자 태스크 97 · 보안 케이스 629" 는 논문 값이다. 소스를
 직접 센 값은 **user 86 / injection 27 / 조합 567** 이다(`comparison.md` 본표 #5).
-우리 `docs/40-prior-art-gap.md` 는 논문 쪽 숫자를 들고 있다.
+둘은 서로 모순이 아니라 세는 판이 다르다(논문 시점 대 지금 main). 어느 쪽인지
+붙여 적어야 하고, `docs/40-prior-art-gap.md` 가 논문 값만 들고 있던 자리에
+그 구분을 넣었다.
 
 ### InjecAgent — 1 차 출처를 열었고, 안 받았다
 
@@ -108,33 +122,70 @@ AgentCanary(`NOTICE`) · Inspect Evals(`NOTICE`). 나머지 4 건은 데이터 �
 **3 단계**는 어느 항목도 논문 라이선스를 근거로 삼지 않았다. 다만 두 건
 (AIShellJack · PoisonedSkills)이 배포 플랫폼 메타데이터에 기댄다.
 
-빈칸은 다섯이다. **없는 확인을 했다고 적지 않기 위해 그대로 남긴다.**
+앞 판은 빈칸을 다섯으로 셌다. 2026-09-09 라이선스 정리에서 **둘(1 · 3)을 닫고,
+하나(2)는 라이선스 기계적 요구만 닫고 방침을 사람 몫으로 남겼다.** 나머지 둘
+(4 · 5)은 라이선스 빈칸이 아니라 재현성·기재 빈칸이라 라이선스 정리에서는
+성격만 표시했고, **같은 날 문서 정합 정리가 둘 다 닫았다**(각 항목에 무엇으로
+닫았는지 적었다). 그리고 앞 판이 세지 않은 라이선스 빈칸 하나(6)를 새로 올린다.
+무엇으로 닫았는지도 같이 적는다 — "닫았다" 만 적으면 다음 사람이 근거를 다시
+못 찾는다.
 
-1. **CC BY 4.0 자료의 개작 표시 의무가 무기록이다.** LivePI · RedCode(데이터) ·
+1. **닫힘 — CC BY 4.0 자료의 개작 표시 의무.** 대상은 LivePI · RedCode(데이터) ·
    RedTeamCUA(데이터셋 설정) · PoisonedSkills, 그리고 figshare 메타를 따르면
-   AIShellJack 까지. CC BY 4.0 은 개작물에 "변경했음"을 밝히라고 요구한다.
-   `normalized/*.yaml` 의 `transform` 이 무엇을 바꿨는지 적기는 하지만, 그것이
-   라이선스 의무의 이행이라고 어디에도 안 적혀 있고 공개 산출물(README · 아티팩트)
-   에 그 표시가 붙는지도 정한 바 없다. 4 단계에서 가장 큰 구멍이다.
-2. **PoisonedSkills 는 attribution 대상이 미확정이다.** zip 안에 라이선스 파일이
-   없고, Zenodo `creators[0].name` 이 `annoymous`(원문 오타), 코드 저장소는
-   `anonymous.4open.science` 다. 익명 심사용 아티팩트라 CC BY 의 핵심 의무를
-   이행할 상대가 없다. 인용처가 확정되기 전에는 표기를 확정할 수 없으므로,
-   이 자료에서 나온 것을 공개 산출물에 싣기 전에 그것부터 정해야 한다.
-3. **CIPR 의 비상업 조항과 우리 루트 `LICENSE` 의 관계가 안 적혀 있다.**
-   저장소 루트는 MIT("Copyright (c) 2026 WTCY")이고 예외 표기가 없는데,
-   `normalized/cipr.yaml` 은 PolyForm Noncommercial 원본의 파생 요약이다. 그
-   파일 머리에 Required Notice 를 달아 둔 것이 지금의 유일한 대응이고, 저장소
-   전체를 MIT 로 제공한다는 선언과 어떻게 양립하는지는 미기재다.
-4. **재취득 명령이 고정점을 강제하지 않는다.** `survey/README.md` 의 재취득
+   AIShellJack 까지 다섯이다. CC BY 4.0 법률 전문(`raw/redcode/dataset/LICENSE`
+   동봉본)을 직접 읽고 Section 3(a)(1) 이 요구하는 다섯(저작자 · 저작권 고지 ·
+   라이선스 고지 · 면책 고지 · 원본 URI)과 3(a)(1)(b) 의 개작 표시를 확인했다.
+   이행은 두 곳에 뒀다 — 루트 `NOTICE` 2 절의 표와, 다섯 정제본 각각의 머리
+   주석. 3(a)(2) 가 "매체에 맞는 합리적 방법" 을 허용하므로 이 배치로 충분하다.
+   정제본이 파일 단위로 복사돼 나가는 물건이라 머리 주석 쪽을 뺄 수 없다.
+2. **부분 — PoisonedSkills 의 표시 대상.** 라이선스 기계적 요구는 닫혔다:
+   3(a)(1)(a) 는 "licensor 가 함께 제공한 경우 유지" 이고 제공된 이름이
+   `annoymous`(원문 오타)뿐이므로, 3(a)(2)·3(a)(3) 에 따라 DOI
+   `10.5281/zenodo.19281322` 로 대신한다(`poisoned-skills.yaml` 머리에 적었다).
+   **남은 것은 사람이 정할 방침이다** — 익명 심사용 아티팩트에서 나온 것을
+   공개 산출물(README · 아티팩트 · 발표 원고)에 싣는가. 선택지 셋:
+   (가) 인용처가 확정될 때까지 이 자료 유래분을 공개 산출물에서 뺀다,
+   (나) DOI 표시만으로 싣고 확정되면 갱신한다, (다) 저자에게 연락해 확정한다.
+   `NOTICE` 5 절에 미해결로 올려 뒀다.
+3. **닫힘 — CIPR 의 비상업 조항과 루트 `LICENSE` 의 관계.** PolyForm
+   Noncommercial 1.0.0 전문(`raw/cipr/LICENSE`)을 직접 읽었다. "Changes and New
+   Works License" 와 "Distribution License" 가 파생물 작성과 배포를 permitted
+   purpose 안에서 허용하므로 `normalized/cipr.yaml` 을 두는 것 자체는 문제가
+   아니다. 문제는 "No Other Rights" 가 **서브라이선스를 금지**한다는 것이고,
+   루트 MIT 선언이 정확히 그 서브라이선스였다. 고친 방법은 셋 중 가장 덜
+   침습적인 쪽을 골랐다 — MIT 본문과 저작권 표시는 한 글자도 안 건드리고,
+   `LICENSE` 머리에 적용 범위 블록을 얹어 `NOTICE` 를 가리키게 했다. 예외를
+   MIT 조문 안에 끼워 넣는 것은 표준 텍스트를 훼손하고, `dataset/survey/` 에만
+   별도 라이선스 문서를 두면 저장소 루트만 보는 사람이 못 본다.
+   `cipr.yaml` 머리에도 "MIT 아님" 을 명시했다.
+4. **열림(라이선스 빈칸 아님) — 재취득 명령이 고정점을 강제하지 않는다.** `survey/README.md` 의 재취득
    블록은 `git clone --depth 1 <url>` 뿐이고 기록된 커밋을 `checkout` 하지
    않는다. 기본 브랜치가 움직이면 다른 트리를 받는다. 5 단계가 말한 "해시로
-   고정" 이 명령 수준에서는 안 걸려 있다.
-5. **한 자료의 고정점 기재가 문서마다 다르다.** MaliciousAgentSkillsBench 는
-   `survey/README.md` 와 `comparison.md` 표가 "고정점 없음" 이라 적었는데,
-   `normalized/malicious-agent-skills-bench.yaml` 에는 커밋 `f7d28b1a` 와
-   CSV md5 `2b2a0f4c…` 가 있다. 정제본 쪽이 더 구체적이다. 함께 받은 `LICENSE`
-   파일에는 바이트만 있고 해시가 없다.
+   고정" 이 명령 수준에서는 안 걸려 있다. **재현성 빈칸이고 라이선스 빈칸이
+   아니다** — 라이선스 정리에서 손대지 않았다. 고칠 자리는 `survey/README.md` 의
+   재취득 블록이고, 각 정제본에 커밋 해시가 있으므로 `git clone --depth 1` 뒤에
+   `git fetch --depth 1 origin <commit> && git checkout -f <commit>` 을 붙이면
+   닫힌다. Zenodo/figshare 두 건은 커밋이 없어 md5 대조가 고정점이다.
+   **2026-09-09 닫혔다.** `survey/README.md` 재취득 절을 다시 썼다 —
+   전체 클론 5 건은 `git init` + `git fetch --depth 1 <url> <sha>` +
+   `checkout FETCH_HEAD` 로 커밋만 받고 체크아웃된 해시를 찍는다. sparse 3 건은
+   `--depth 1` 을 못 쓴다(얕은 클론에는 기록된 커밋이 안 온다) — `--filter=blob:none`
+   으로 줄이고 `checkout <sha>` 를 건다. VCS 없는 3 건은 md5 대조가 고정점이고,
+   Zenodo·figshare 는 파일 이름을 지어내는 대신 레코드 API 에서 읽게 했다.
+5. **라이선스 빈칸 아님 — 한 자료의 고정점 기재가 문서마다 다르다. 2026-09-09
+   닫혔다.** MaliciousAgentSkillsBench 는 `survey/README.md` 와 `comparison.md`
+   표가 "고정점 없음" 이라 적었는데, `normalized/malicious-agent-skills-bench.yaml`
+   에는 커밋 `f7d28b1a` 와 CSV md5 `2b2a0f4c…` 가 있다. 두 표의 고정점 칸을
+   정제본 값으로 채웠다. "없음" 이 가리키던 사실(로컬에 `.git` 이 없다 — 클론이
+   아니라 파일 두 개를 직접 받았다)은 괄호로 남겼다. 함께 받은 `LICENSE` 파일에는
+   바이트만 있고 해시가 없다 — 그건 그대로다.
+6. **열림(새로 세는 라이선스 빈칸) — Atomic Red Team 상류 라이선스가 `unknown`
+   이다.** `normalized/aishelljack.yaml` 의 기법 목록은 test_guid 와 테스트
+   이름을 Atomic Red Team 에서 물려받은 것으로 보이는데, 확보한 13 파일 안에
+   그 상류의 라이선스 근거가 없다. `survey/search-log.md` 가 같은 항목을 두 번의
+   감사에서 `unknown` 으로 내렸다. 앞 판 목록이 다섯이라 적은 것은 이 항목을
+   external.md 로 안 옮겼기 때문이지 없어서가 아니다. 추정으로 채우지 않는다 —
+   상류를 확정하려면 Atomic Red Team 저장소의 `LICENSE` 를 직접 열어야 한다.
 
 ## 이 자료가 검증하는 것
 

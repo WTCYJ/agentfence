@@ -38,14 +38,15 @@
 | AIShellJack (부분) | `aishelljack` | 13 | 2,699,896 | figshare DOI + 파일별 md5 | 충돌 — 동봉 LICENSE 는 Apache-2.0, figshare 메타는 CC BY 4.0 |
 | LivePI | `livepi` | 318 | 2,503,427 | `d48d3fa4` | CC BY 4.0 (`LICENSE`·`LICENSE-DATA` 둘 다) |
 | BIPIA | `bipia` | 99 | 2,472,974 | `a004b69e` | MIT (첫 줄이 4칸 들여쓰기라 GitHub API 는 NOASSERTION) |
-| MaliciousAgentSkillsBench (부분) | `malicious-agent-skills-bench` | 2 | 28,529 | 없음 (CSV 직접 내려받기) | MIT |
+| MaliciousAgentSkillsBench (부분) | `malicious-agent-skills-bench` | 2 | 28,529 | 커밋 `f7d28b1a` + CSV md5 `2b2a0f4c…` (로컬에 `.git` 없음 — 직접 내려받기) | MIT |
 
 레코드 수도 파서로 다시 셌고 확보 단계 보고와 일치했다 — CIPR 640×3(+ipi_file
 633 / ipi_web 284 / dpi 60), RedCode 1,410(py 27파일 810 + bash 20파일 600),
 BIPIA 코드공격 100(test 50 + train 50), PoisonedSkills SKILL.md zip 1,070 /
 디스크 1,069, AgentCanary 과제 md 484(= 실과제 483 + 템플릿), DeepTrap 태스크
-42 + zh 10 + 깨끗한 씬 54, MaliciousAgentSkillsBench 157행. `normalized/` 의 11개
-YAML 은 전부 `yaml.safe_load` 를 통과한다.
+42 + zh 10 + 주입 전 씬 54(en 42 + zh 12, id 는 F001~F054 로 겹치지 않는다),
+MaliciousAgentSkillsBench 157행. `normalized/` 의 11개 YAML 은 전부
+`yaml.safe_load` 를 통과한다.
 
 감사에서 고친 것은 전부 "확보 전에 쓴 추정치가 갱신되지 않은" 값이었다. 목록은
 `search-log.md` 맨 아래 감사 절에 있다. 굵직한 것만: RedCode 페이로드
@@ -138,21 +139,83 @@ CIPR·AgentCanary·DeepTrap 의 하네스를 우리가 한 번도 돌려 보지 
 ## 재취득
 
 `raw/` 는 커밋되지 않는다. 아래는 받기만 하고 **아무것도 실행하지 않는다**.
-자세한 커밋·파일 id 는 `comparison.md` 와 `normalized/*.yaml` 의 `provenance` 에
-있다.
+
+앞 판의 블록은 `git clone --depth 1 <url>` 뿐이라 기본 브랜치의 그때 HEAD 를
+받았고, 위 표의 고정점을 명령이 강제하지 않았다. 기본 브랜치가 움직이면 다른
+트리를 받는다. 아래는 커밋을 인자로 넘겨 그 커밋만 받는다.
 
 ```bash
 mkdir -p dataset/raw && cd dataset/raw
-git clone --depth 1 https://github.com/StarConnor/CIPR cipr
-git clone --depth 1 https://github.com/antgroup/Agent3Sigma-Canary agentcanary
-git clone --depth 1 https://github.com/ZJUICSR/DeepTrap deeptrap
-git clone --depth 1 https://github.com/microsoft/BIPIA bipia
-git clone --depth 1 https://github.com/leizhao7/livepi livepi
+
+# 전체를 받은 5 건. 마지막 줄이 실제로 체크아웃된 해시를 찍으므로 표와 대조된다.
+while read -r dir url sha; do
+    git init -q "$dir"
+    git -C "$dir" fetch -q --depth 1 "$url" "$sha"
+    git -C "$dir" checkout -q FETCH_HEAD
+    printf '%-12s %s
+' "$dir" "$(git -C "$dir" rev-parse HEAD)"
+done <<'EOF'
+cipr https://github.com/StarConnor/CIPR d069c204461256970dda3c0d2edc147cd3725e36
+agentcanary https://github.com/antgroup/Agent3Sigma-Canary 5072b78260d6dfe16f28a479ae83db4ef5c86bce
+deeptrap https://github.com/ZJUICSR/DeepTrap 8de1579b2fd7b811fa648690b587ea1be117b99a
+bipia https://github.com/microsoft/BIPIA a004b69ec0dd446e0afd461d98cb5e96e120a5d0
+livepi https://github.com/leizhao7/livepi d48d3fa4949c587bef5de93a088fd9457b8544a6
+EOF
 ```
 
-RedCode · RedTeamCUA · Inspect Evals 는 sparse-checkout 로 일부만 받았고,
-PoisonedSkills 는 Zenodo zip, AIShellJack 은 figshare 파일 id, MaliciousAgentSkills
-Bench 는 CSV 두 개다. 각각의 정확한 명령은 해당 `normalized/*.yaml` 에 적혀 있다.
+서브트리만 받은 3 건. `--depth 1` 을 안 쓰는 이유는 얕은 클론에서는 기록된
+커밋이 안 와서 `checkout <해시>` 가 실패하기 때문이다. `--filter=blob:none` 이
+대신 용량을 줄인다.
+
+```bash
+cd dataset/raw
+
+git clone -q --filter=blob:none --sparse https://github.com/UKGovernmentBEIS/inspect_evals inspect-evals-agentdojo
+git -C inspect-evals-agentdojo sparse-checkout set src/inspect_evals/agentdojo
+git -C inspect-evals-agentdojo checkout 3e572ec4b3219c1e13618120edfd25b77ccf1099
+
+git clone -q --filter=blob:none --sparse https://github.com/OSU-NLP-Group/RedTeamCUA redteamcua
+git -C redteamcua sparse-checkout set desktop_env/evaluators evaluation_examples/examples goals mm_agents
+git -C redteamcua checkout a05b8bd04629e19a9a06bf04f8e0c5b53549d16c
+
+# RedCode 만 cone 모드가 아니다. `**` 패턴을 쓰므로 --no-cone 이 필요하다.
+git clone -q --filter=blob:none --sparse https://github.com/AI-secure/RedCode redcode
+git -C redcode sparse-checkout set --no-cone /LICENSE /dataset/LICENSE '/dataset/RedCode-Exec/**' '/evaluation/RedCode_Exec/**'
+git -C redcode checkout c84b6db88fd8bd258e29f12e692ccfd4287a454d
+```
+
+VCS 가 없는 3 건은 파일 해시가 고정점이다. 받은 뒤 아래 값과 대조하고, 다르면
+그 자료로 잰 값을 인용하지 않는다.
+
+```bash
+cd dataset/raw
+
+# MaliciousAgentSkillsBench — 저장소는 git 이지만 우리는 CSV 두 개만 받았다.
+# 커밋을 걸어 두면 그 판의 두 파일이 온다. 이름이 바뀌었으면 여기서 죽는다.
+git init -q malicious-agent-skills-bench
+git -C malicious-agent-skills-bench fetch -q --depth 1 https://github.com/protectskills/MaliciousAgentSkillsBench f7d28b1a9de4eb33d552529cf79d1065d765f6c3
+git -C malicious-agent-skills-bench checkout -q FETCH_HEAD -- LICENSE malicious_skills.csv
+md5sum malicious-agent-skills-bench/malicious_skills.csv   # 2b2a0f4c1e5dd63031ec8ddfb6b09b3f · 27,434 B
+
+# PoisonedSkills — Zenodo 레코드 19281322. 파일 이름을 지어내지 않고 레코드에서 읽는다.
+curl -sL https://zenodo.org/api/records/19281322 | python3 -c "import sys, json; [print(f['key'], f['links']['self']) for f in json.load(sys.stdin)['files']]"
+# 받은 zip 이 08da7feb103d0ab2b2e12b4f5f567f3a · 1,253,687 B 여야 한다.
+
+# AIShellJack — figshare 아티클 30111988 (DOI 10.6084/m9.figshare.30111988, v4).
+# 91 개 중 5 개만 받았다. 아래가 파일 id 와 md5 를 찍는다.
+curl -sL https://api.figshare.com/v2/articles/30111988/files | python3 -c "import sys, json; [print(f['id'], f['name'], f['supplied_md5']) for f in json.load(sys.stdin)]"
+# 받는 것: linux_atomic_tests_attack_payloads.json · repos.zip · workspace_setup.py
+#          · check_command_execution.py · terminal_monitor.py
+# 안 받는 것: raw_results.zip (1,675,993,431 B)
+```
+
+위 명령의 커밋·해시는 `comparison.md` 1 절 표와 `normalized/*.yaml` 에서 왔다.
+정제본에서 그 값이 어디 있는지는 파일마다 다르다 — bipia · deeptrap ·
+inspect-evals-agentdojo · malicious-agent-skills-bench · poisoned-skills ·
+redteamcua 는 최상위 `provenance`, agentcanary · cipr · livepi · redcode 는
+최상위 `meta`, aishelljack 은 `meta.provenance` 다. 키 이름도 갈린다
+(`source_url` 대 `repo`, `obtained` 대 `collected`). 스키마를 한 벌로 모으는 것은
+아직 안 했다.
 
 주의: PoisonedSkills 를 풀면 Windows Defender 가 `V910/SKILL.md` 를
 `Trojan:NPM/Stealer.HBH!MTB` 로 격리한다(3회 재현). 그래서 디스크 1,069 / zip

@@ -554,6 +554,10 @@ def main_axis(n, sd=None):
             # 방금 없앤 시각 비대칭이 되살아난다.
             stopped = f"{aid} {done[aid]}회차에서 중단 ({e})"
             print(f"    ... {stopped}")
+            # 이 회차는 **실제로 소비됐다.** 무효로도 안 세고 나가면
+            # planned 와 valid+invalid 가 어긋나고, 그 차이가 어디로 갔는지는
+            # `stopped` 문자열에만 남는다 — 파일만 보고 비용을 못 맞춘다.
+            s["invalid"]["fatal"] = s["invalid"].get("fatal", 0) + 1
             continue
         mine = any(canary in x["request"] for x in SEEN[before:])
         if "invalid" in r:

@@ -246,7 +246,9 @@ different numbers, that is the most useful thing anyone could send us.
 
 ## License / scope
 
-[MIT](LICENSE). Research code — one product, one version (2.1.220 — untagged
+[MIT](LICENSE), except for the third-party-derived files listed in
+[NOTICE](NOTICE) — `dataset/survey/normalized/cipr.yaml` is PolyForm
+Noncommercial 1.0.0, not MIT. Research code — one product, one version (2.1.220 — untagged
 in the raw files), one
 account, measured on WSL2/Windows. Carry that scope with any citation. The
 findings are about configuration behaviour, not about defeating a working

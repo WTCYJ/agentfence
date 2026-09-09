@@ -12,5 +12,11 @@
 set -e
 cd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 export PYTHONIOENCODING=utf-8
-nohup python3 -u probe_deny_bash_chain.py 10 > deny-chain5.out 2>&1 &
-echo "기동 pid=$!  -> deny-chain5.out"
+# 출력 이름에 **실행 구분자**를 넣는다. `deny-chain5.out` 은 손으로 번호를
+# 붙여 돌리던 시절의 숫자가 그대로 굳은 것이고, 그대로 두면 같은 축을 다시
+# 돌릴 때 앞 판의 콘솔 기록을 덮는다 — 이 프로브는 JSON 에 행 배열만 남기므로
+# .out 이 유일한 회차 이력인 경우가 많다.
+mkdir -p run-log
+OUT="run-log/$(date -u +%Y%m%dT%H%M%S)-deny-chain.out"
+nohup python3 -u probe_deny_bash_chain.py 10 > "$OUT" 2>&1 &
+echo "기동 pid=$!  -> $OUT"

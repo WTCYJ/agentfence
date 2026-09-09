@@ -39,7 +39,7 @@ def mtag():
     return f"-{m}" if m else ""
 
 
-def pooled(target, mode):
+def pooled(target, mode, version=None):
     """이 꼬리표로 디스크에 남은 회차를 합친다. 반환 (위반, 유효, 샤드 수).
 
     회차마다 세션을 새로 여므로(`--no-session-persistence` 무조건 부착)
@@ -49,11 +49,21 @@ def pooled(target, mode):
     **INVALID 판은 뺀다.** 그건 "0 으로 측정됨" 이 아니라 "측정 실패" 고, 더하면
     분모에 재지 못한 회차가 들어간다. check_docs 의 회귀표 대조도 같은 규칙으로
     합친다 — 둘이 갈리면 표와 데이터가 갈린다.
+
+    `version` 을 주면 **그 버전의 샤드만** 합친다. 꼬리표는 파일 이름에만 있고
+    그 값은 run_regression.sh 에서만 설정되므로, 맨손으로 부르면 글롭이 버전
+    이전 판까지 잡는다 — 실제로 2.1.220 시절 파일 30 회차가 오늘 판의 분모에
+    들어갈 수 있었다. 버전이 안 적힌 옛 샤드도 뺀다. "어느 버전인지 모르는
+    회차" 를 버전축 칸에 넣는 것은 미관측을 결과로 세는 것과 같다.
     """
     k = tot = shards = 0
     for f in sorted(Path(".").glob(f"wsl{mtag()}-{Path(target).stem}-{mode}*.json")):
         d = json.loads(f.read_text(encoding="utf-8"))
         if d.get("verdict") == "INVALID" or not d.get("valid"):
+            continue
+        if version and d.get("agent_version") != version:
+            print(f"  (건너뜀 {f.name} — 버전 {d.get('agent_version')!r}"
+                  f" ≠ {version!r})")
             continue
         k += d["violations"]
         tot += d["valid"]
@@ -96,6 +106,12 @@ def shard(target, mode, n):
         i += 1
     out.write_text(json.dumps({
         "case": target, "mode": mode, "n": n,
+        # **버전을 파일 안에 적는다.** 여태 꼬리표는 파일 **이름**에만 있었고
+        # (`AGENTFENCE_MACHINE`), 이름과 실제 바이너리가 어긋나도 사후에 확인할
+        # 방법이 없었다. runner 가 회차마다 이미 읽는 값이라 추가 비용이 없다.
+        # 디스크의 옛 원시에는 이 키가 없다 — 소급해 채우지 않는다.
+        "agent_version": r.get("agent_version"),
+        "claude_bin": os.environ.get("AGENTFENCE_CLAUDE", ""),
         "attempts": attempts, "valid": valid,
         "violations": r.get("violations"), "rate": r.get("rate"),
         "verdict": r["verdict"], "layers": layers,
@@ -142,22 +158,45 @@ def main():
         # **이어 돌리기.** 한도에 걸려 죽어도 앞의 샤드는 디스크에 남고, 같은
         # 명령을 다시 부르면 모자란 만큼만 채운다. campaign.py 의 재개와 같은
         # 성질을 이 칸에도 준다.
-        prev = -1
-        while True:
-            k, tot, shards = pooled(target, mode)
-            lo, hi = wilson(k, tot)
-            print(f"  누적 {k}/{tot} [{max(lo, 0.0):.2f}, {hi:.2f}] · "
-                  f"샤드 {shards}개 · 목표 {goal}", flush=True)
-            if tot >= goal:
-                break
-            if tot <= prev:
-                # 유효 회차가 하나도 안 늘었다 = 한도·인증처럼 더 돌아도 같은
-                # 조건이다. **여기서 멈추는 것이 앞의 샤드를 건지는 방법이다.**
-                print("  !! 샤드가 유효 회차를 못 냈다 — 멈춘다. 조건이 풀리면"
-                      " 같은 명령을 다시 부르면 이어 돈다.", flush=True)
-                break
-            prev = tot
-            shard(target, mode, min(n, goal - tot))
+        #
+        # 같은 칸을 두 프로세스가 동시에 돌면 서로가 방금 쓴 샤드를 못 보고
+        # 정지 조건이 깨진다 — 실제로 그렇게 나온 회차가 격리돼 있다
+        # (`_quarantine-20260908/WHY.md`). 부탁 대신 잠금으로 막는다.
+        lock = Path(f".lock-{Path(target).stem}-{mode}")
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            sys.exit(f"!! {lock} 가 이미 있다 — 같은 칸이 돌고 있다."
+                     f" 아니면 죽은 판의 흔적이니 지우고 다시 부르라.")
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        try:
+            accumulate(target, mode, n, goal)
+        finally:
+            lock.unlink(missing_ok=True)
+
+
+def accumulate(target, mode, n, goal):
+    """목표를 채울 때까지 샤드를 이어 붙인다."""
+    # 버전은 판 시작에 한 번만 읽는다. 이어 붙이는 샤드가 **같은 버전인지**를
+    # 걸러야 회귀표의 왼쪽 열과 오른쪽 열이 한 분모에 안 섞인다.
+    version = runner.agent_version()
+    prev = -1
+    while True:
+        k, tot, shards = pooled(target, mode, version)
+        lo, hi = wilson(k, tot)
+        print(f"  누적 {k}/{tot} [{max(lo, 0.0):.2f}, {hi:.2f}] · "
+              f"샤드 {shards}개 · 목표 {goal} · 버전 {version}", flush=True)
+        if tot >= goal:
+            break
+        if tot <= prev:
+            # 유효 회차가 하나도 안 늘었다 = 한도·인증처럼 더 돌아도 같은
+            # 조건이다. **여기서 멈추는 것이 앞의 샤드를 건지는 방법이다.**
+            print("  !! 샤드가 유효 회차를 못 냈다 — 멈춘다. 조건이 풀리면"
+                  " 같은 명령을 다시 부르면 이어 돈다.", flush=True)
+            break
+        prev = tot
+        shard(target, mode, min(n, goal - tot))
 
 
 def selfcheck():
@@ -176,23 +215,35 @@ def selfcheck():
         # INVALID 회차에는 `violations`·`rate` 키가 **아예 없다**(runner.run_case).
         # 스텁이 실물과 다르면 스텁에서만 도는 코드가 생긴다.
         r = {"verdict": "FIXED" if ok else "INVALID", "valid_runs": ok,
+             "agent_version": fake.version,
              "detail": [{"valid": True, "defense_layer": "enforcement"}] * ok}
         if ok:
             r["violations"], r["rate"] = 0, 0.0
         return r
 
-    real_run, real_argv, cwd = runner.run_case, sys.argv, os.getcwd()
+    real_run, real_ver = runner.run_case, runner.agent_version
+    real_argv, cwd = sys.argv, os.getcwd()
     tmp = tempfile.mkdtemp(prefix="wslprobe-selfcheck-")
     try:
         runner.run_case = fake
+        # 진짜 CLI 를 부르지 않는다. 버전은 이 검사에서 **거르는 기준**일 뿐이다.
+        runner.agent_version = lambda: "9.9.9"
         os.chdir(tmp)
         sys.argv = ["wsl_probe.py", "cases/E-B1.yaml", "10", "bypassPermissions", "25"]
 
-        fake.valid = True
+        fake.valid, fake.version = True, "9.9.9"
         main()
         assert calls == [10, 10, 5], f"25 회를 10+10+5 로 안 채웠다: {calls}"
         # 같은 초에 끝난 샤드가 서로를 덮어쓰면 여기서 25 가 안 나온다.
         assert pooled("cases/E-B1.yaml", "bypassPermissions")[1] == 25, "샤드 유실"
+        # 버전이 파일 **안에** 있어야 한다. 이름표만으로는 사후 대조가 안 된다.
+        one = sorted(Path(".").glob("wsl-E-B1-bypassPermissions-*.json"))[0]
+        assert json.loads(one.read_text(encoding="utf-8"))["agent_version"] \
+            == "9.9.9", "샤드에 버전이 안 실렸다"
+        # 다른 버전의 샤드는 같은 분모에 들어오면 안 된다.
+        assert pooled("cases/E-B1.yaml", "bypassPermissions", "9.9.9")[1] == 25
+        assert pooled("cases/E-B1.yaml", "bypassPermissions", "2.1.220")[1] == 0, \
+            "다른 버전 샤드를 합친다"
 
         calls.clear()                    # 이미 25 회가 디스크에 있다 -> 재개
         main()
@@ -203,8 +254,21 @@ def selfcheck():
         fake.valid = False
         main()
         assert calls == [10], f"유효 0 인데 계속 돈다: {calls}"
+
+        # 잠금이 남아 있으면 두 번째 프로세스는 들어오지 못한다.
+        Path(".lock-E-B1-bypassPermissions").write_text("1")
+        calls.clear()
+        try:
+            main()
+        except SystemExit as e:
+            assert ".lock-" in str(e), e
+        else:
+            raise AssertionError("잠긴 칸을 그대로 돌렸다")
+        assert calls == [], f"잠금을 무시하고 회차를 태웠다: {calls}"
+        Path(".lock-E-B1-bypassPermissions").unlink()
     finally:
-        runner.run_case, sys.argv = real_run, real_argv
+        runner.run_case, runner.agent_version = real_run, real_ver
+        sys.argv = real_argv
         os.chdir(cwd)
         shutil.rmtree(tmp, ignore_errors=True)
     print("wsl_probe selfcheck OK")

@@ -8,6 +8,13 @@
 # 2026-09-09 재검증: 체크아웃을 goals/ · mm_agents/ 로 넓혀 다시 읽었다.
 # 그 결과 앞 판본의 세 군데가 틀렸다는 것이 드러났다 — corrections 절 참조.
 # 원본 안에 삽입 문구(rm -f ~/.ssh/id_rsa 류)가 설계상 들어 있다. 자료다.
+#
+# 표시 — 이 줄들은 이 파일 사본과 함께 가야 한다.
+#   RedTeamCUA / OSU-NLP-Group / https://github.com/OSU-NLP-Group/RedTeamCUA
+#   저장소는 Apache-2.0, 데이터셋 설정은 CC-BY-4.0(croissant_metadata.json 의 license).
+#   CC BY 4.0 https://creativecommons.org/licenses/by/4.0/ · 무보증
+#   개작함: 864 건 중 24 개 목표의 분류 축과 판정 구조만 요약. 이전 개작 없음.
+#   전체 표시와 근거 조항은 저장소 루트 NOTICE 2 절.
 
 provenance:
   source_url: https://github.com/OSU-NLP-Group/RedTeamCUA

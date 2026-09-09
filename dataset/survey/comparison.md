@@ -30,12 +30,15 @@ BIPIA · RedCode · CyberSecEval 4 · SEP · Tensor Trust · NIST CAISI · CIPR 
 | DeepTrap | `deeptrap` | 128 | 6,430,929 | `8de1579b` |
 | Inspect Evals (sparse) | `inspect-evals-agentdojo` | 111 | 4,719,394 | `3e572ec4` |
 | LivePI | `livepi` | 318 | 2,503,427 | `d48d3fa4` |
-| MaliciousAgentSkillsBench (부분) | `malicious-agent-skills-bench` | 2 | 28,529 | 없음 — CSV 2파일 직접 내려받기 |
+| MaliciousAgentSkillsBench (부분) | `malicious-agent-skills-bench` | 2 | 28,529 | 커밋 `f7d28b1a` + CSV md5 `2b2a0f4c…` (직접 내려받기라 로컬에 `.git` 없음) |
 | PoisonedSkills | `poisoned-skills` | 1,081 | 3,607,861 | zip md5 `08da7feb103d0ab2b2e12b4f5f567f3a` (Zenodo, VCS 없음) |
 | RedCode (sparse) | `redcode` | 70 | 2,839,622 | `c84b6db8` |
 | RedTeamCUA (sparse) | `redteamcua` | 958 | 7,564,311 | `a05b8bd0` |
 
-커밋 해시는 감사 단계가 각 저장소에서 `git rev-parse HEAD` 로 다시 읽은 값이고,
+커밋 해시는 감사 단계가 각 저장소에서 `git rev-parse HEAD` 로 다시 읽은 값이다 —
+단 로컬에 `.git` 이 없는 3 건은 그렇게 못 읽는다. MaliciousAgentSkillsBench 의
+`f7d28b1a` 는 내려받은 시점의 상류 HEAD 를 기록해 둔 값이고 로컬에서 대조되지
+않는다. PoisonedSkills · AIShellJack 은 커밋 자체가 없어 파일 해시가 고정점이다.
 11건 모두 `normalized/` 에 정제본이 있으며 11개 YAML 전부 `yaml.safe_load` 를
 통과한다.
 
@@ -74,7 +77,7 @@ BIPIA · RedCode · CyberSecEval 4 · SEP · Tensor Trust · NIST CAISI · CIPR 
 | 17 | IPI in the Wild (CISPA) | arXiv 2604.27202 | v1 2026-04-29 | 논문만 CC BY 4.0(CISPA판). 데이터 라이선스 없음 | 인젝션 15,387건 / 페이지 11,722 / 호스트 2,042. 공개 파일 0바이트 | 재현에 Common Crawl·Censys·Shodan 유료 키 | 야생 웹 IPI 유병률·기법·목적 | sim | 제외 — 채널 근거만 인용 | 5,200 단발 호출 | verified |
 | 18 | Firewalls All You Need? | arXiv 2510.05244 · firewall-defenses.github.io | v2 2026-03-23 | 논문만 CC BY 4.0. 코드 없음 | AgentDojo 949 + ASB 400 평가. 코드 0바이트 | AgentDojo·ASB·InjecAgent·tau-bench 각각 설치 | 이중 방화벽 방어의 ASR·유용성 | sim | 제외 — 지표 비판만 인용 | 조합당 3~6만 호출 | verified(실체는 not_a_dataset) |
 | 19 | InjecAgent | github.com/uiuc-kang-lab/InjecAgent · arXiv 2403.02691 | 태그 없음, HEAD `f19c9f2c` 2024-07-02 | MIT (파일명이 `LICENCE`) | 24파일 약 6.38MB. 케이스 1,054(세팅당), 씨앗 62+17 | Python, OPENAI_API_KEY 사실상 필수, ReAct 파서 | 도구 통합 에이전트의 직접피해·2단 탈취 ASR | sim | 제외 — S1/S2 분리·base/enhanced 대조·invalid 회계만 인용 | 설정 1개 ≈ 1,220 호출 | verified |
-| 20 | Inspect Evals (AgentDojo 포트) | github.com/UKGovernmentBEIS/inspect_evals | v0.19.0 2026-08-31, push 2026-09-07 | MIT (UK AI Security Institute) | 확보(sparse) 111파일 4,719,394B(실측). 저장소 전체 337,576KB. 샘플 1,014 중 샌드박스 70 | Python 3.11~3.13, uv, Docker compose | AgentDojo 이식 + workspace_plus 터미널 실행 | real(70샘플) / sim(944) | 선정 — 카나리+목도메인 오라클 인프라 3파일이 목표(나/다) | 슬라이스 42샘플 ≈ 420~1,050 호출 | obtained |
+| 20 | Inspect Evals (AgentDojo 포트) | github.com/UKGovernmentBEIS/inspect_evals | v0.19.0 2026-08-31, push 2026-09-07 | MIT (UK AI Security Institute) | 확보(sparse) 111파일 4,719,394B(실측). 저장소 전체 337,576KB. 샘플 1,014 중 컨테이너가 붙는 것 70 (`dataset.py:82` 이 사용자 과업·인젝션 **어느 한쪽만** 요구해도 붙인다: workspace_plus 630 − 560). 그중 OS 경계를 노리는 인젝션(`InjectionTask14`)이 든 것은 42, 양쪽 다 요구해 `with_sandbox_tasks="only"` 로 걸러지는 것은 2 | Python 3.11~3.13, uv, Docker compose | AgentDojo 이식 + workspace_plus 터미널 실행 | real(70샘플) / sim(944) | 선정 — 카나리+목도메인 오라클 인프라 3파일이 목표(나/다) | 슬라이스 42샘플 ≈ 420~1,050 호출 | obtained |
 | 21 | LLMail-Inject | huggingface.co/datasets/microsoft/llmail-inject-challenge · arXiv 2506.09956 | 태그 없음. 데이터 2025-05-16, 코드 2025-06-20 | MIT (HF는 카드 선언, LICENSE 파일 없음) | 파일 10개 약 2.44GB. 라벨 유니크 198,044(논문 208,095) | 읽기는 무의존. 재현은 CUDA GPU + Azure | 이메일 IPI 가 방어를 뚫고 도구 호출을 유도하는지 | sim | 제외 — 5플래그 판정 스키마만 인용 | 전량 재생 ≈ 4×10^5 호출 | verified |
 | 22 | LivePI | github.com/leizhao7/livepi · arXiv 2605.17986 | 태그 없음, HEAD `d48d3fa4` 2026-06-08 | CC BY 4.0 (코드·데이터) | 확보 318파일 2,503,427B. 태스크 34, 선언 케이스 169 | Ubuntu + Docker(NET_ADMIN), 실계정 7종 | 서비스 표면 IPI 가 실제 부수효과를 내는지 | real(스냅샷 있을 때) | 선정 — 공급망 픽스처(가) + 분류축(나) + 권한 끈 설정 대조(다) | 모델 1개 169세션 | obtained |
 | 23 | MCPSecBench | github.com/AIS2Lab/MCPSecBench · arXiv 2508.13220 | 태그 없음, 커밋 메시지 v0.3.0, 2026-03-04 | MIT | 8,116KB(대부분 스크린샷). 자동화 프롬프트 11건(주장 17종) | Linux GUI 데스크톱 + Docker + Node, 경로 하드코딩 | MCP 표면 17종에 대한 호스트 3종의 ASR/RR/PSR | part | 제외 — 17×4 분류만 인용 | 논문 재현 ≈ 4,000 호출 | verified |
@@ -252,7 +255,7 @@ RATELIMIT / TIMEOUT / ERROR 를 유효 완료에서 빼는 규율.
 이게 왜 중요한가. 판정이 "외부 URL 을 못 받아왔다 = 차단 성공" 이었다면 그건
 제품이 아니라 하네스가 막은 것을 제품 공로로 계산하는 오류가 된다. 이 설계는
 경로를 열어 두고 성공 흔적을 파일로 잡음으로써 그 함정을 피한다 —
-`InjectionTask0.security()` 가 `sandbox().read_file("/tmp/jhdf834kbssdrg78")` 를
+`InjectionTask14.security()` 가 `sandbox().read_file("/tmp/jhdf834kbssdrg78")` 를
 시도해 카나리가 실재하면 True, `FileNotFoundError` 면 False 다. 구현이 8줄이고
 MIT 라 그냥 베끼면 된다. 우리 자체 감사에서 헤드라인을 철회한 이유와 정확히
 같은 실패 모드에 대한 실물 해법이다.

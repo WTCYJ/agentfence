@@ -32,6 +32,13 @@ import threading
 from pathlib import Path
 
 import probe_read
+from probe_credentials import Fatal
+
+# 한 팔이 한도에 걸리면 남은 팔은 안 돈다. 재시도로 안 풀리는데 계속 돌면
+# 예산만 태우고 `valid: 0` 인 팔이 결과 파일에 결과처럼 남는다 —
+# 파일이 있으니 "쟀다" 로 읽힌다. 그것이 이 저장소가 최악이라고 규정한 행위와
+# 한 걸음 거리다. 마지막 판(_quarantine-20260820)이 정확히 그 모양이었다.
+STOPPED = None
 
 HITS = []
 
@@ -142,6 +149,8 @@ def one_run(host, url_tmpl, sandbox, allow, mode="bypassPermissions",
                 why = " · ".join(f"{k}={d[k]}" for k in
                                  ("errors", "api_error_status", "subtype")
                                  if d.get(k) not in (None, "", []))[:200]
+            if d.get("api_error_status") == 429:
+                raise Fatal(str(d.get("result") or "429")[:200])
     if not ok:
         return {"invalid": why}
     # 영수증은 **실행 시점에만** 생긴다. 없으면 스크립트가 안 돈 것이고,
@@ -155,10 +164,22 @@ def one_run(host, url_tmpl, sandbox, allow, mode="bypassPermissions",
 
 def arm(label, host, url_tmpl, sandbox, allow, n,
         mode="bypassPermissions", strict=False):
+    global STOPPED
     arrived = ran = ok = valid = 0
     bad = {}
+    if STOPPED:
+        print(f"[{label}] 건너뜀 — 앞 팔에서 중단({STOPPED})")
+        return {"label": label, "host": host, "sandbox": sandbox,
+                "allow": allow, "mode": mode, "strict": strict,
+                "arrived": 0, "curl_ok": 0, "ran": 0, "valid": 0,
+                "invalid": {}, "order": "block", "stopped": f"건너뜀: {STOPPED}"}
     for _ in range(n):
-        r = one_run(host, url_tmpl, sandbox, allow, mode, strict)
+        try:
+            r = one_run(host, url_tmpl, sandbox, allow, mode, strict)
+        except Fatal as e:
+            STOPPED = str(e)
+            print(f"    ... {label} {valid}회에서 중단(재시도 무의미)", flush=True)
+            break
         if "invalid" in r:
             bad[r["invalid"]] = bad.get(r["invalid"], 0) + 1
             continue
@@ -175,6 +196,11 @@ def arm(label, host, url_tmpl, sandbox, allow, n,
     return {"label": label, "host": host, "sandbox": sandbox, "allow": allow,
             "mode": mode, "strict": strict,
             "arrived": arrived, "curl_ok": ok, "ran": ran, "valid": valid,
+            # **팔을 블록으로 돈다**는 사실을 파일에 적는다. interleave.py 가
+            # 없애려는 시점 교란이 이 프로브에는 그대로 있고, 교대로 도는 판이
+            # 나오면 두 판은 **같은 분모에 못 넣는다**. 설계를 바꿀지는 사람이
+            # 정할 일이라 여기서는 조건만 명시한다.
+            "order": "block", "stopped": STOPPED,
             "invalid": bad}
 
 

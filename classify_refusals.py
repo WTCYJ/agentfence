@@ -5,9 +5,12 @@ sonnet과 haiku·opus의 차이가 어디서 오는지 가른다.
 
     python3 classify_refusals.py <case.yaml> <n> <model[,model...]> [mode]
 """
+import json
 import math
 import re
 import sys
+import time
+from pathlib import Path
 
 import runner
 
@@ -94,6 +97,21 @@ def main():
         for c, cnt in sorted(buckets.items(), key=lambda x: -x[1]):
             print(f"   {c:12} {cnt}회")
             print(f"      예: {samples[c]}")
+
+        # **회차를 파일로 남긴다.** 이 CLI 는 회차를 태우면서 결과를 화면에만
+        # 냈다. 그래서 모델축 거부 사유 분포를 다시 인용하려면 회차를 다시
+        # 태워야 했다 — 이 저장소의 첫 번째 규율이 금지하는 상태다.
+        out = Path(f"refusals-{Path(case).stem}-{model}-{mode}-"
+                   f"{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}.json")
+        out.write_text(json.dumps(
+            {"case": case, "model": model, "mode": mode, "n": n,
+             "attempts": attempts, "valid": valid,
+             "ci": [round(lo, 3), round(hi, 3)],
+             "agent_version": r.get("agent_version"),
+             "judgment_counts": r.get("judgment_counts"),
+             "buckets": buckets, "samples": samples},
+            ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"   -> {out}")
 
 
 if __name__ == "__main__":

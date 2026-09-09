@@ -44,7 +44,7 @@
 
 | 하위 필드 | 값 |
 |---|---|
-| `origin` | `changelog` \| `docs` \| `cve` \| `design` \| `measurement` |
+| `origin` | `changelog` \| `docs` \| `cve` \| `design` \| `measurement` \| `external` |
 | `ref` | 원 출처 문자열 |
 | `upstream_version` | 출처가 지목하는 제품 버전 또는 저장소 커밋. 모르면 `unknown` |
 | `collected` | 이 저장소에 케이스 파일이 처음 커밋된 날 (`git log --diff-filter=A`) |
@@ -62,6 +62,27 @@
 조건을 확인한 적이 없다.** 확인 전까지 `unknown` 이고, 데이터셋을 배포하려면
 그때 확인해야 한다. 나머지 여섯은 이 저장소가 쓴 것이라 MIT 다.
 
+### `origin: external` — 외부 데이터셋에서 승격한 사례
+
+`dataset/survey/` 가 조사한 외부 자료에서 가져온 사례다. 다른 다섯 값과 달리
+**원 저작물이 따로 있고 그 저작물에 조건이 붙는다.** 그래서 승격할 때 채워야
+하는 칸이 넷 더 있다. 넷 중 하나라도 못 채우면 승격하지 않는다 — 못 채운 채로
+들어온 항목은 "어디서 왔는지 모르는 사례" 이고, 그건 이 데이터셋이 하지 않기로
+한 것이다.
+
+| 채울 것 | 어디에 | 없으면 |
+|---|---|---|
+| 라이선스 | `provenance.license` — 정제본의 라이선스 **문장을 옮겨 적지 않고** 어느 정제본인지 가리킨다(`survey/normalized/<자료>.yaml`). 두 벌로 갈라 놓으면 어긋난다 | 승격 불가. `unknown` 인 자료는 애초에 커밋하지 않는다 |
+| 고정점 | `provenance.upstream_version` — 커밋 해시, 또는 VCS 가 없으면 파일 md5 와 바이트 수. 받은 날짜만으로는 고정이 아니다 | 승격 불가. 원본 버전을 못 고정하면 받지 않는다는 규칙(`dataset/external.md` 통합 규칙)이 먼저다 |
+| `upstream_id` | `provenance.ref` — 그 자료 안에서 이 사례를 유일하게 집는 식별자. 형식은 자료마다 다르다(`workspace_plus-u40-i14` · `tasks/task_R3_T01` · `<source>/<repo>/<skill_name>`). 정제본의 `upstream_id` 절이 그 형식을 적어 둔다 | 원본과 대조가 안 된다. 승격 불가 |
+| `what_it_does_not_test` | `oracle.blind` — 정제본의 같은 이름 절을 사례 단위로 좁혀 옮긴다. 대부분은 "원본이 집행 계층을 끄고 쟀다" 이고, 그 사실이 이 사례의 결과를 읽는 방식을 정한다 | 원본의 조건이 우리 수치에 묻은 채로 인용된다. 승격 불가 |
+
+`transform` 에는 시뮬레이션 도구를 실제 부작용으로 바꾼 번역을 적는다. 그 번역
+뒤의 결과는 원 벤치마크 점수와 비교하지 않는다 — 다른 것을 잰 값이다.
+
+외부 사례는 자기 `family_id` 를 받고 우리 계열과 섞지 않는다. 절차 전체는
+`dataset/external.md` 「통합 규칙」에 있고, 이 표는 그 규칙이 스키마의 어느
+칸으로 떨어지는지만 적는다.
 ## `attacker_control` — 사용자 설정은 공격자 능력이 아니다
 
 권한 모드(`bypassPermissions` · `dontAsk`), 샌드박스 설정, 서브에이전트 정의,

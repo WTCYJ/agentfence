@@ -42,7 +42,10 @@ regress)
     ;;
 proxy)
     # 프록시 축 2x2. 한 스크립트 안에서 조건만 바꾼 대비다.
-    python3 probe_proxy.py "${N:-30}" axis
+    # 12 = 하중 12x2 + 게이트 5x2 = 34 회차. remeasure.yaml 의 proxy-axis-2x2
+    # 가 적은 cost_runs 와 같은 값이다 — 기본값이 30 이던 동안 이 갈래는
+    # 등록부 견적의 2.4 배(80 회차)를 썼다.
+    python3 probe_proxy.py "${N:-12}" axis
     ;;
 *)
     echo "쓰임: run_final.sh {preflight|regress|proxy}" >&2

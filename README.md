@@ -1496,6 +1496,11 @@ agent-belt의 `pass^k`와 **다른 지표**다. pass^k는 k회 전부 통과할 
 WSL2/Windows 에서 잰 값이다.
 범위를 떼면 이 저장소가 반복해서 경계한 바로 그 오류가 된다.
 
+**MIT 가 저장소 전부를 덮지는 않는다.** `dataset/survey/normalized/` 의 정제본
+일부는 외부 자료의 파생물이고, 그중 `cipr.yaml` 은 상류가 서브라이선스를 금지해
+MIT 로 내줄 권한이 우리에게 없다(PolyForm Noncommercial 1.0.0). 어느 파일이
+예외이고 어떤 표시가 따라가야 하는지는 [NOTICE](NOTICE) 에 있다.
+
 ### 다음 릴리스 감시
 
 새 릴리스가 나왔는지만 확인한다. API 를 쓰지 않으므로 몇 초면 끝난다.

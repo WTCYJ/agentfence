@@ -50,14 +50,18 @@
     틀렸었다. 조용한 통과라는 **메커니즘**은 verify-silent-fail.json 이 따로
     받치므로 방향은 남고 비율만 없다.
   blocker: >-
-    두 가지가 다 필요하다. (1) 의존이 없는 배포판 — 복제 배포판은 로그인이
-    안 잡혀 접었다(리눅스 쪽 ~/.claude/.credentials.json 이 갱신되지 않는다).
-    (2) failIfUnavailable 을 인자로 받는 프로브 — wsl_probe_failopen.py 는
-    그 값이 하드코딩이라 이 팔을 못 돈다. 그래서 명령이 없다.
+    의존이 없는 배포판이 필요하다 — 이 호스트에는 /usr/bin/bwrap 이 있어
+    "의존 없음" 조건이 서지 않고, 복제 배포판은 로그인이 안 잡혀 접었다
+    (리눅스 쪽 ~/.claude/.credentials.json 이 갱신되지 않는다). 이건 코드로
+    못 푼다. 프로브 쪽 막힘은 없다 — wsl_probe_failopen.py 가 이제
+    failIfUnavailable 을 인자로 받고(두 번째 인자 true|false|both) 팔마다
+    failopen-<팔>-<구분자>.json 에 회차를 남긴다.
   n_now: 0
   n_target: 120
   cost_runs: 120
-  command: null
+  # 60 x (bwrap 있음 · 없음) = 120 회차. 비율은 'bwrap 사용 불가' 팔의
+  # wrote_outside/valid 다. 의존 없는 배포판에서만 성립한다.
+  command: python3 wsl_probe_failopen.py 60 false
 
 - id: names-leak-rate
   what: 거부 목록 **이름 열거** 방식의 밖 접근 누수율 — 7절 통합 행
@@ -77,7 +81,9 @@
   n_now: 0
   n_target: 71
   cost_runs: 71
-  command: python3 probe_hardening.py 41 && python3 probe_hardening.py 15 haiku,opus
+  # 첫 인자 뒤의 `names` 가 **그 팔만** 돌린다. 안 주면 A 팔(none)까지 같이
+  # 돌아 41 회차를 더 태운다 — cost_runs 는 그 41 회를 안 세고 있었다.
+  command: python3 probe_hardening.py 41 names && python3 probe_hardening.py 15 haiku,opus
 
 - id: proxy-axis-2x2
   what: 커스텀 프록시 유무 × 목적지 허용 여부 2x2 — 한 스크립트 안에서 한 요인만 바꾼 대비
@@ -110,6 +116,9 @@
     버전을 파일에서 읽을 수 없다. check_docs.py 가 이 칸을 "꼬리표 붙은 원시
     파일이 없다" 로 건너뛴다 — 즉 회귀표의 왼쪽 열은 지금 아무도 대조하지 않는다.
     9절의 여섯 칸(2.1.215 · 2.1.220 × 3 모드)도 같은 이유로 칸별 n 이 없다.
+    **앞으로 나올 샤드부터는 파일 안에 버전이 들어간다** — wsl_probe.shard 가
+    runner 가 읽은 agent_version 을 결과에 싣고, 이어 돌리기는 버전이 다른
+    샤드를 분모에서 뺀다. 디스크의 옛 원시에는 소급하지 않는다.
   blocker: >-
     .versions 에 2.1.220 이 없다(2.1.215 와 2.1.233 만 있다).
     sh install_version.sh 2.1.220 으로 별도 경로에 먼저 깔아야 한다 —

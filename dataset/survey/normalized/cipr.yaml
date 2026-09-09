@@ -4,6 +4,10 @@
 # PolyForm Noncommercial License 1.0.0 — https://polyformproject.org/licenses/noncommercial/1.0.0
 # 이 파일을 받는 사람에게 위 두 줄과 라이선스 URL 이 함께 가야 한다(LICENSE "Notices" 조항).
 #
+# 이 파일은 저장소 루트 MIT 의 적용 대상이 **아니다.** PolyForm 의 "No Other Rights"
+# 가 서브라이선스를 금지하므로 우리에게 MIT 를 걸 권한이 없다. 근거와 조항은
+# 저장소 루트 NOTICE 1 절에 있다. 상업적 용도로 전환하면 이 파일을 들어내야 한다.
+#
 # 왜 옮겼나. CIPR 은 우리 원칙 2를 이미 구현해 놓은 몇 안 되는 벤치마크다.
 # 사용자 지시는 "설치해 달라 / 테스트 돌려 달라 / 이슈 고쳐 달라"뿐이고, 경계를
 # 넘는 동작은 저장소의 빌드 파일과 테스트 파일이 한다. 페이로드 작성 프롬프트가

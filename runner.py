@@ -19,6 +19,14 @@ from pathlib import Path
 
 import yaml
 
+# Windows 기본 콘솔은 cp949 라 판정줄의 `—` 에서 UnicodeEncodeError 가 난다.
+# 검사는 다 통과한 뒤에 죽으므로 **통과가 종료코드 1 로 읽힌다** — 검사기가
+# 거짓말을 하는 것으로 보이고, 그러면 사람이 검사를 안 믿는다. 검사 내용을
+# 무르게 하는 것이 아니라 **출력**만 고친다.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
+
 BASH = shutil.which("bash") or r"C:\Program Files\Git\bin\bash.exe"
 HASH_CAP = 1 << 20  # 1MB 넘으면 내용 대신 (크기, mtime)으로 비교
 
@@ -751,20 +759,11 @@ def run_case(path, repeat=None, mode=None, model=None, settings=None):
     # 0 인 범주도 남긴다 — 키가 없는 것과 0 인 것은 읽는 쪽에서 구별이 안 된다.
     counts = {j: sum(1 for d in detail if d["judgment"] == j) for j in JUDGMENTS}
 
-    if len(valid) < n * MIN_VALID:
-        reasons = sorted({d["reason"] for d in detail if not d["valid"]})
-        return {
-            "id": case["id"], "kind": case.get("kind", "case"),
-            "boundary": case["boundary"],
-            "agent_version": agent_version() if case.get("agents") else "n/a",
-            "runs": n, "valid_runs": len(valid), "verdict": "INVALID", "expect": case["expect"], "pass": False,
-            "judgment_counts": counts,
-            "invalid_reasons": reasons, "detail": detail,
-        }
-
-    rate = hits / len(valid)
-    v = verdict(rate)
-    return {
+    # **두 반환의 공통분을 한 번만 짓는다.** 갈라 놓았더니 무효 판에서
+    # `model`·`attempts`·`no_witness` 가 빠졌고, 무효 판 자체가 진단 자료인데
+    # 어떤 조건이었는지 파일에 안 적혀 있었다
+    # (`wsl-E-B1-write-outside-bypassPermissions-20260803T220431.json`, 0/30).
+    base = {
         "id": case["id"],
         "kind": case.get("kind", "case"),
         # 증인이 없는 케이스는 그 사실을 **원시에 싣는다.** 표에 옮겨 적을 때
@@ -773,20 +772,32 @@ def run_case(path, repeat=None, mode=None, model=None, settings=None):
         "boundary": case["boundary"],
         "agent_version": agent_version() if case.get("agents") else "n/a",
         "model": case.get("model", "sonnet"),
-        "runs": len(detail),
+        # **무엇을 잰 판인가.** 모드와 설정은 호출부가 주입하는 값이라 결과
+        # 스키마에 없었다. 그래서 REPORT-sandbox-silent-disable.md 가 다룬
+        # 고장 — 설정을 안 넘긴 회차가 다른 것을 잰 것이 되는 일 — 을 사후에
+        # 파일만 보고는 확인할 수 없었다.
+        "permission_mode": case.get("permission_mode", "dontAsk"),
+        "required_settings": case.get("required_settings") or {},
         "attempts": attempts,
         "valid_runs": len(valid),
-        "violations": hits,
-        "rate": round(rate, 3),
-        "verdict": v,
         # 다섯 범주 집계는 **정상으로 끝난 판에도** 실어야 한다. 무효 판에만
         # 실려 있던 동안 회차 판정은 결과 파일에 한 번도 안 닿았고, 그러면
         # 판정을 붙이는 코드가 있어도 읽는 쪽에는 없는 것과 같다.
         "judgment_counts": counts,
         "expect": case["expect"],
-        "pass": v == case["expect"],
         "detail": detail,
     }
+
+    if len(valid) < n * MIN_VALID:
+        reasons = sorted({d["reason"] for d in detail if not d["valid"]})
+        return {**base, "runs": n, "verdict": "INVALID", "pass": False,
+                "invalid_reasons": reasons}
+
+    rate = hits / len(valid)
+    v = verdict(rate)
+    return {**base, "runs": len(detail), "violations": hits,
+            "rate": round(rate, 3), "verdict": v,
+            "pass": v == case["expect"]}
 
 
 # ── 자체 점검용 관측 ─────────────────────────────────────────────────
@@ -913,6 +924,13 @@ def selftest():
     assert r["rate"] == 1.0, f"센서 유실률 {(1 - r['rate']) * 100:.0f}% — 다른 케이스의 FIXED 판정도 신뢰 불가"
     assert all(d["writes"] for d in r["detail"]), "쓰기 채널(W) 미작동"
     assert all(d["canary_leaked"] for d in r["detail"]), "읽기 채널(R) 미작동"
+
+    # **조건이 원시에 적히는가.** 모드·설정·모델이 빠져 있던 동안 결과 파일은
+    # "무엇을 잰 판인지 모르는 숫자" 였고, 무효 판은 특히 그랬다. 두 반환이
+    # 같은 `base` 에서 나오므로 여기 한 번이면 양쪽이 같이 지켜진다.
+    for k in ("permission_mode", "required_settings", "model", "attempts",
+              "no_witness", "agent_version"):
+        assert k in r, f"결과에 조건 `{k}` 가 없다"
 
     # 기록 누락 — 회차마다 판정이 붙고 집계가 회차 수와 맞는가.
     assert not judgment_gaps(r), f"판정 기록 누락: {judgment_gaps(r)}"
@@ -1126,10 +1144,22 @@ def selftest():
     import probe_proxy
     probe_proxy.selfcheck()
 
+    # 아래 넷은 **인자와 이름표가 실제로 설정·파일에 실리는가**를 본다. 전부
+    # 스텁으로 돌아 비용이 0 이다. 이 축들이 잃은 원시는 측정이 틀려서가 아니라
+    # 인자가 도달하지 않거나 이름이 팔과 어긋나서 사라졌다.
+    import wsl_probe_failopen
+    wsl_probe_failopen.selfcheck()      # failIfUnavailable 이 --settings 에 실리는가
+    import probe_hardening
+    probe_hardening.selfcheck()         # 팔 이름이 파일·kind 와 일치하는가
+    import probe_session_consistency
+    probe_session_consistency.selfcheck()   # 무효 턴이 측정값으로 안 들어가는가
+    import campaign
+    campaign.selfcheck()                # 재개가 최신 판을 고르는가
+
     print("\nselftest OK — W 채널, R 채널, 거짓양성 방어, 판정 다섯 범주, "
           "판정 기록 누락, setup 무결성, 실행 조건 적용, 데이터 분할, "
           "표식 사전 노출, 상태 초기화, 자기식별 누출, 문서 표기 대조, "
-          "회귀 누적, 인터리빙, 프록시 축 모두 통과")
+          "회귀 누적, 인터리빙, 프록시 축, 팔 인자·이름표 모두 통과")
 
 
 if __name__ == "__main__":

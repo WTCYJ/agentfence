@@ -9,7 +9,7 @@
 둘 다 사람이 눈으로 잡았다. 자기식별 누출을 selftest 어서션으로 막은 것과 같은
 이유로, 이것도 검사로 막는다.
 
-아홉 가지를 본다.
+열한 가지를 본다.
 
     1. `k/n` 옆에 붙은 95% 구간이 wilson(k, n) 과 맞는가   (문서 내부 정합)
     2. 층 분해(`perm A · enf B`)의 합이 그 행의 n 과 맞는가 (문서 내부 정합)
@@ -24,12 +24,30 @@
        `remeasure.yaml` 의 `backed: null` 항목이 오라클이다
     9. 영어 요약의 분수가 한국어 결과 문서에도 있는가        (문서 <-> 문서)
        `README.en.md` 는 요약이라 자기 출처가 없다 — 없으면 영어에만 사는 값이다
+   10. `dataset/` 의 색인·정제본·확보 표가 실제와 맞는가       (문서 <-> 데이터)
+       색인 <-> `cases/*.yaml` 1:1 · `schema.md` 가 요구하는 칸 ·
+       확보 표 <-> `dataset/raw/` 의 실제 파일 수와 바이트
+   11. 결과 파일의 버전 꼬리표가 파일 안 `agent_version` 과 같은가 (이름 <-> 내용)
 
 3 이 없으면 1·2 는 "틀린 숫자가 자기 자신과는 일관된" 경우를 통과시킨다.
 
 9 는 6 이 **꼬리표 붙은 칸만** 본다는 데서 온다. 꼬리표도 구간도 p 주석도 없는
 영어 분수는 1·2·3·4·6·8 을 전부 빠져나간다 — 철회 사고 때 `README.en.md` 가
 철회 전 수치를 이고 두 검사를 통과한 경로가 정확히 그것이다.
+
+10 은 여태 `dataset/` 이 **어느 검사에도 안 걸려 있던** 자리다. 색인은 손으로
+쓴 메타데이터 층이고, 확보 표의 파일 수·바이트는 감사가 한 번 재고 굳은 값이다 —
+다시 세는 사람이 없으면 그 표에는 "쟀다" 는 서명만 남는다. `dataset/raw/` 는
+`.gitignore` 라 없을 수 있는데, 그때는 **건너뛴 사실을 인쇄한다.** 조용히
+통과시키는 것이 이 검사기의 고질적 실패다.
+
+11 은 3 이 버전을 **파일 이름에서만** 읽는다는 데서 온다. 이름표와 실제 바이너리가
+어긋나도 3 은 못 잡는다. 옛 원시에는 그 칸이 없으므로 소급하지 않고 건너뜀으로
+인쇄한다 — 없는 것을 채워 넣지 않는다.
+
+7 은 등록부(`remeasure.yaml`)가 부르는 프로브가 **결과 파일을 쓰는지**도 본다.
+이름 검사는 이미 있는 쓰기 지점만 훑으므로, 쓰기가 아예 없는 프로브는 통째로
+검사 밖이었다 — `fail-open-rate` 가 그렇게 원시 없이 헤드라인이 됐다.
 
 8 은 3·5·6 이 **못 닿는 자리**를 본다. 그 셋은 문서의 값을 원시 파일에 묶는데,
 원시가 아예 없는 값은 묶을 대상이 없어 검사 밖에 있었다. 그런 값의 철회는 여태
@@ -82,6 +100,14 @@ from pathlib import Path
 import yaml
 
 from classify_refusals import fisher, wilson
+
+# Windows 기본 콘솔은 cp949 라 판정줄의 `—` 에서 UnicodeEncodeError 가 난다.
+# 검사는 다 통과한 뒤에 죽으므로 **통과가 종료코드 1 로 읽힌다** — 검사기가
+# 거짓말을 하는 것으로 보이고, 그러면 사람이 검사를 안 믿는다. 검사 내용을
+# 무르게 하는 것이 아니라 **출력**만 고친다.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
 
 # 소수 둘째 자리 반올림만 허용한다. 0.02 로 잡았더니 실제로 게시됐던 오류
 # (0/10 상한을 0.26 으로 인쇄, 윌슨은 0.278, 차이 0.0175)를 통과시켰다 —
@@ -147,7 +173,13 @@ CELLNOTE = re.compile(r"<!--\s*cell:\s*([\w.:-]+)\s*-->")
 POOLROW = re.compile(r"통합|합계|pooled|combined|total", re.I)
 # 결과 파일 이름을 만드는 자리. 바깥 따옴표만 짝지어서 f-string 안의
 # `{'-' + tag if tag else ''}` 같은 내부 따옴표에 안 걸린다.
-OUTNAME = re.compile(r"""(?:Path|open)\(\s*f?(["'])((?:(?!\1).)*\.jsonl?)\1""")
+# **인접한 조각은 한 이름으로 잇는다.** 줄이 길어 둘로 쪼갠
+#     Path(f"refusals-{stem}-{model}-"
+#          f"{stamp}.json")
+# 는 여태 이 검사에 아예 안 보였다 — 안 보이는 이름은 면제 목록에도 안 떠서
+# 아무도 못 알아챈다. 검사 7 이 조용히 절반만 돌던 자리다.
+OUTNAME = re.compile(r"""(?:Path|open)\(\s*((?:f?(["'])(?:(?!\2).)*\2\s*)+)""")
+OUTPART = re.compile(r"""f?(["'])((?:(?!\1).)*)\1""")
 # **실행 구분자의 출처.** 변수 이름을 나열하지 않는다 — 새 프로브가 다른 이름을
 # 써도 UTC 타임스탬프나 난수에서 왔으면 통과해야 하고, `s` 같은 이름을 통째로
 # 허용하면 아무 `s` 나 구분자로 읽힌다.
@@ -513,8 +545,18 @@ def check_raw(text=None):
                 skipped.append(f"{f.name} 는 INVALID (유효 {d.get('valid')}"
                                f"/{d.get('attempts')}) — 결과 아님")
                 continue
+            # 꼬리표(파일 이름)와 내용이 서로를 검증한다. 여태 버전은 **이름**
+            # 에서만 읽혔고, 이름과 실제 바이너리가 어긋나도 아무도 못 잡았다.
+            # 옛 원시에는 이 칸이 없다 — 소급하지 않고 건너뛴 사실을 인쇄한다.
+            ver_tag, av = ver_of(f.name), d.get("agent_version")
+            if av is None:
+                skipped.append(f"{f.name} 에 agent_version 이 없다 — 이름표를 "
+                               f"내용으로 검증 못 함(그 칸을 싣기 전 판)")
+            elif ver_tag and av != ver_tag:
+                bad.append(f"{f.name} 의 이름표는 v{ver_tag} 인데 파일 안 "
+                           f"agent_version 은 {av} 다 — 꼬리표와 내용이 다르다")
             acc = pool.setdefault(
-                (ver_of(f.name), Path(d["case"]).stem, d["mode"]), [0, 0])
+                (ver_tag, Path(d["case"]).stem, d["mode"]), [0, 0])
             acc[0] += d["violations"]
             acc[1] += d["valid"]
         for (ver, case_id, mode), (k, n_) in sorted(pool.items()):
@@ -949,7 +991,18 @@ def check_en_mirror(en=EN_DOC, sources=None, text=None):
     return bad, checked
 
 
-def check_names():
+def _outnames(src):
+    """소스에서 결과 파일 이름 표현식을 `(표현식, 시작위치)` 로 낸다.
+
+    이어붙인 조각을 합친 뒤 `.json`/`.jsonl` 로 끝나는 것만 결과 파일로 본다.
+    """
+    for m in OUTNAME.finditer(src):
+        expr = "".join(p.group(2) for p in OUTPART.finditer(m.group(1)))
+        if expr.endswith(".json") or expr.endswith(".jsonl"):
+            yield expr, m.start()
+
+
+def check_names(entries=None):
     """새 결과 파일 이름에 **실행 구분자**가 있는가.
 
     `probe_hardening.py` 가 `hardening-{tag}.json` 이라는 고정 이름을 썼다.
@@ -963,6 +1016,8 @@ def check_names():
 
     면제는 **파일별 이름별로** 적는다. 프로브 단위로 면제하면 그 프로브에 새
     출력이 하나 더 붙을 때 조용히 같이 통과한다.
+
+    `entries` 를 주면 그 등록부로만 본다 — selfcheck 의 훼손 시험 통로다.
 
     반환: (오류 목록, 검사한 출력 수, 면제 목록)
     """
@@ -997,6 +1052,11 @@ def check_names():
     }
     writers = sorted(set(Path(".").glob("probe_*.py")) | set(Path(".").glob("wsl_probe*.py"))
                      | {Path(n) for n in ("verify_silent_fail.py", "check_positive_signal.py",
+                                          # classify_refusals 는 결과를 쓰는데 이 집합 밖이라
+                                          # 이름 검사에 **보이지 않았다**. 지금 이름은 구분자를
+                                          # 달고 있어 덮어쓰기 위험은 없지만, 검사가 없으면
+                                          # 다음 사람이 구분자를 떼도 아무도 안 잡는다.
+                                          "classify_refusals.py",
                                           "check_mask_warn.py", "campaign.py")})
     bad, checked, exempt = [], 0, []
     for p in writers:
@@ -1007,8 +1067,7 @@ def check_names():
         names = {m.group(1) for m in
                  re.finditer(r"^\s*(\w+)\s*=.*", src, re.M)
                  if DISCRIM.search(m.group(0))}
-        for m in OUTNAME.finditer(src):
-            expr = m.group(2)
+        for expr, pos in _outnames(src):
             checked += 1
             fields = FIELD.findall(expr)
             if any(DISCRIM.search(f) or (set(re.findall(r"\w+", f)) & names)
@@ -1018,11 +1077,33 @@ def check_names():
             if why:
                 exempt.append(f"{p.name} 의 `{expr}` 는 실행 구분자 면제 — {why}")
                 continue
-            ln = src[:m.start()].count("\n") + 1
+            ln = src[:pos].count("\n") + 1
             bad.append(f"{p.name}:{ln} 결과 파일 `{expr}` 에 실행 구분자가 없다 — "
                        f"판마다 같은 이름이면 앞판을 덮는다. UTC 타임스탬프나 "
                        f"난수를 이름에 넣거나, 못 넣는 이유를 "
                        f"check_names() 의 EXEMPT 에 적어라")
+    # 재측정 등록부가 부르는 프로브는 **결과 파일을 써야 한다.** 위 루프는 이미
+    # 있는 쓰기 지점만 보므로 쓰기가 아예 없는 프로브는 통째로 검사 밖이었다 —
+    # `fail-open-rate` 가 그랬다. 회차를 태우고 콘솔로만 읽은 값이 헤드라인이
+    # 됐고, 지탱할 원시가 **존재할 수 없었다.** 등록부에 명령을 적는 것은 "이걸
+    # 다시 재면 그 칸이 산다" 는 약속이므로 여기서 그 약속을 검사한다.
+    for ent in (load_registry() if entries is None else entries):
+        cmd = ent.get("command") or ""
+        mods = sorted(set(re.findall(r"\b(\w+\.py)\b", cmd)))
+        if not mods:
+            exempt.append(f"{REGISTRY} 의 `{ent.get('id')}` 명령은 셸 스크립트라 "
+                          f"프로브를 직접 못 짚는다 — 결과 쓰기 대조 안 됨")
+            continue
+        for mod in mods:
+            mp = Path(mod)
+            if not mp.exists():
+                bad.append(f"{REGISTRY} 의 `{ent.get('id')}` 가 부르는 {mod} 이 없다")
+                continue
+            checked += 1
+            if not any(_outnames(mp.read_text(encoding="utf-8"))):
+                bad.append(f"{REGISTRY} 의 `{ent.get('id')}` 가 {mod} 을 부르는데 "
+                           f"그 프로브는 결과 파일을 안 쓴다 — 콘솔에서 읽은 값은 "
+                           f"원시에 못 묶는다")
     return bad, checked, exempt
 
 
@@ -1077,6 +1158,189 @@ def check_registry(docs=None, entries=None):
                                f"remeasure.yaml 의 `{rid}` 는 backed: null 이다. "
                                f"같은 줄에 철회를 적거나 다시 재라")
     return bad, len(watch), ok
+
+
+# ── 검사 10 · 데이터셋 ────────────────────────────────────────────────
+# `dataset/` 은 여태 아무 검사도 안 받았다. 색인·정제본·확보 표는 전부 손으로 쓴
+# 값이고, 이 저장소가 반복해서 낸 실패가 정확히 그 모양이다 — 산문은 맞는데
+# 인용되는 자리가 안 따라간다. 셋을 묶는다: 색인 <-> `cases/`,
+# 색인 <-> `schema.md` 의 필수 칸, 확보 표 <-> `dataset/raw/` 의 실제 파일·바이트.
+DATASET_INDEX = "dataset/cases.yaml"
+SCHEMA_DOC = "dataset/schema.md"
+NORMALIZED = "dataset/survey/normalized"
+SURVEY_DOC = "dataset/survey/README.md"
+RAW_DIR = "dataset/raw"
+# 표의 값 칸이 통째로 백틱 대안들이면 그것이 열거형이다. 열거를 검사기에 베껴
+# 두면 schema.md 와 갈라진다 — 문서를 오라클로 쓴다.
+ENUMCELL = re.compile(r"^`[^`]+`(?:\s*\|\s*`[^`]+`)+$")
+# 확보 표의 한 행: `| CIPR | `cipr` | 2,685 | 127,363,137 | …`
+HAVEROW = re.compile(r"^\|[^|\n]+\|\s*`([\w.-]+)`\s*\|\s*([\d,]+)\s*\|\s*([\d,]+)\s*\|", re.M)
+# 정제본에서 고정점으로 인정하는 칸. 자료마다 이름이 다르다(VCS 없는 것은 md5).
+FIXPOINT = ("commit", "upstream_version", "file_md5")
+
+
+def _md_table(text, header):
+    """`header` 줄로 시작하는 마크다운 표의 데이터 행을 셀 리스트로 낸다.
+
+    표를 헤더 문자열로 집는다. 같은 문서에 열 이름이 다른 표가 여럿 있어서
+    (`| 채울 것 | 어디에 | 없으면 |`) 위치로 집으면 문서를 고칠 때 조용히 다른
+    표를 읽는다. 셀 안의 이스케이프된 파이프는 구분자가 아니다.
+    """
+    rows, seen = [], False
+    for line in text.splitlines():
+        if not seen:
+            seen = line.strip() == header
+            continue
+        if not line.strip().startswith("|"):
+            break
+        if set(line.replace("|", "").strip()) <= set("-: "):
+            continue
+        rows.append([c.strip().replace("\\|", "|")
+                     for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))])
+    return rows
+
+
+def _enum(cell):
+    return [t.strip("` ") for t in cell.split("|")]
+
+
+def _norm_block(d):
+    """정제본의 출처 블록.
+
+    최상위 `provenance` · 최상위 `meta` · `meta.provenance` 세 갈래가 공존한다
+    (11개 중 6/4/1). 통합은 다른 담당이므로 여기서는 **어느 갈래든 찾아서**
+    내용만 본다 — 갈래를 강제하면 지금 진행 중인 편집과 충돌한다.
+    """
+    b = d.get("provenance") or d.get("meta") or {}
+    if isinstance(b, dict) and isinstance(b.get("provenance"), dict):
+        b = b["provenance"]
+    return b if isinstance(b, dict) else {}
+
+
+def _norm_bad(name, d):
+    """정제본 하나가 라이선스와 고정점을 다는가.
+
+    `schema.md` 「origin: external」이 승격에 요구하는 넷 중 둘이다. 나머지 둘
+    (`upstream_id` · `what_it_does_not_test`)은 사례 단위라 승격 시점에 본다.
+    """
+    b = _norm_block(d)
+    out = []
+    if not b:
+        return [f"{name} 에 출처 블록이 없다 (provenance · meta · meta.provenance)"]
+    if not b.get("license"):
+        out.append(f"{name} 의 출처 블록에 `license` 가 없다 — 확인 못 했으면 `unknown` 이라고 적는다")
+    if not any(b.get(k) for k in FIXPOINT):
+        out.append(f"{name} 의 출처 블록에 고정점이 없다 ({' · '.join(FIXPOINT)} 중 하나)")
+    return out
+
+
+def check_dataset(entries=None, schema=None, survey=None):
+    """`dataset/` 의 색인·정제본·확보 표가 실제와 맞는가. (검사 10)
+
+    인자를 주면 그 값으로만 본다 — selfcheck 가 훼손된 입력을 넣기 위한 통로다.
+    저장소가 깨끗한 동안 진짜 파일을 오라클로 쓰면, 검사기가 고장나도 어서션이
+    통과한다(이 파일의 다른 훼손 시험과 같은 이유).
+
+    반환: (오류 목록, 검사 항목 수, 건너뜀 목록)
+    """
+    bad, checked, skipped = [], 0, []
+    if entries is None:
+        entries = yaml.safe_load(Path(DATASET_INDEX).read_text(encoding="utf-8"))
+    if schema is None:
+        schema = Path(SCHEMA_DOC).read_text(encoding="utf-8")
+    if survey is None:
+        survey = Path(SURVEY_DOC).read_text(encoding="utf-8")
+
+    # ① 색인 <-> cases/*.yaml 1:1. 한쪽에만 있으면 "출처 없이 도는 케이스" 이거나
+    #    "안 도는 출처" 다. 둘 다 데이터셋이 아니다.
+    ids = [e.get("case_id") for e in entries]
+    files = {p.stem for p in Path("cases").glob("*.yaml")}
+    for cid in sorted(set(ids) - files):
+        bad.append(f"{DATASET_INDEX} 의 `{cid}` 에 맞는 cases/{cid}.yaml 이 없다")
+    for cid in sorted(files - set(ids)):
+        bad.append(f"cases/{cid}.yaml 이 {DATASET_INDEX} 색인에 없다 — 출처 없는 케이스")
+    for cid in sorted({c for c in ids if ids.count(c) > 1}):
+        bad.append(f"{DATASET_INDEX} 에 `{cid}` 가 두 번 있다")
+    checked += len(ids) + len(files)
+
+    # ② schema.md 가 요구하는 칸과 열거값. 목록을 **문서에서 읽는다** —
+    #    검사기에 베껴 두면 스키마를 고칠 때 갈라지고, 갈라진 쪽이 조용히 이긴다.
+    top = [(c[0].strip("`"), c[2]) for c in _md_table(schema, "| 필드 | 필수 | 값 |")
+           if len(c) >= 3 and "✓" in c[1]]
+    sub = [(c[0].strip("`"), c[1]) for c in _md_table(schema, "| 하위 필드 | 값 |")
+           if len(c) >= 2]
+    if not top or not sub:
+        skipped.append(f"{SCHEMA_DOC} 의 필드 표를 못 찾았다 — 필수 칸 대조 안 됨")
+    for e in entries:
+        cid = e.get("case_id", "?")
+        prov = e.get("provenance")
+        for where, need, src in (("", top, e), ("provenance.", sub, prov)):
+            if not isinstance(src, dict):
+                bad.append(f"{cid} 의 `provenance` 가 매핑이 아니다")
+                break
+            for name, cell in need:
+                checked += 1
+                if name not in src:
+                    bad.append(f"{cid} 에 필수 칸 `{where}{name}` 이 없다 ({SCHEMA_DOC})")
+                elif ENUMCELL.match(cell) and str(src[name]) not in _enum(cell):
+                    bad.append(f"{cid} 의 `{where}{name}` 이 {_enum(cell)} 밖이다: "
+                               f"{src[name]!r}")
+
+    # ③ 스키마가 적은 건수. 사례를 늘리고 문장을 안 고치는 것이 이 저장소의
+    #    흔한 실패다(확보 전 추정치가 갱신되지 않는 것과 같은 부류).
+    m = re.search(r"지금\s*(\d+)\s*건", schema)
+    if m:
+        checked += 1
+        if int(m.group(1)) != len(entries):
+            bad.append(f"{SCHEMA_DOC} 는 색인이 {m.group(1)} 건이라 적었는데 "
+                       f"실제는 {len(entries)} 건")
+    else:
+        skipped.append(f"{SCHEMA_DOC} 에 「지금 N 건」 문장이 없다 — 건수 대조 안 됨")
+
+    # ④ 정제본. `yaml.safe_load` 를 통과하는가(survey/README 가 그렇게 적었다)와
+    #    라이선스·고정점이 있는가.
+    norm = sorted(Path(NORMALIZED).glob("*.yaml"))
+    for p in norm:
+        checked += 1
+        try:
+            d = yaml.safe_load(p.read_text(encoding="utf-8"))
+        except yaml.YAMLError as ex:
+            bad.append(f"{p.as_posix()} 파싱 실패: {ex.__class__.__name__}")
+            continue
+        bad += _norm_bad(p.name, d if isinstance(d, dict) else {})
+
+    # ⑤ 확보 표 <-> 디스크. 파일 수와 바이트를 문서에 적어 두고 아무도 다시 안
+    #    세면, 그 표는 "감사가 쟀다" 는 서명만 남고 값은 굳는다.
+    rows = HAVEROW.findall(survey)
+    checked += 1
+    if len(rows) != len(norm):
+        bad.append(f"{SURVEY_DOC} 확보 표는 {len(rows)} 행인데 정제본은 {len(norm)} 개다")
+    for label, count in re.findall(r"(실제 확보|정제본)\s*(\d+)\s*[건개]", survey):
+        checked += 1
+        if int(count) != len(rows):
+            bad.append(f"{SURVEY_DOC} 의 「{label} {count}」 가 확보 표 {len(rows)} 행과 다르다")
+    root = Path(RAW_DIR)
+    if not root.is_dir():
+        skipped.append(f"{RAW_DIR} 가 없다(.gitignore) — 확보 표의 파일 수·바이트 대조 안 됨")
+    else:
+        for name, nf, nb in rows:
+            checked += 1
+            d = root / name
+            if not d.is_dir():
+                bad.append(f"{SURVEY_DOC} 확보 표의 `{name}` 이 {RAW_DIR} 에 없다")
+                continue
+            # `.git` 은 빼고 센다 — 확보 표가 그렇게 잰 값이다(README 그 절).
+            fs = [f for f in d.rglob("*") if f.is_file() and ".git" not in f.parts]
+            got = (len(fs), sum(f.stat().st_size for f in fs))
+            if got != (int(nf.replace(",", "")), int(nb.replace(",", ""))):
+                bad.append(f"{SURVEY_DOC} 확보 표의 `{name}` 이 디스크와 다르다: "
+                           f"표 {nf}파일 {nb}B · 실제 {got[0]}파일 {got[1]}B")
+    for name, _, _ in rows:
+        checked += 1
+        if not (Path(NORMALIZED) / f"{name}.yaml").exists():
+            bad.append(f"{SURVEY_DOC} 확보 표의 `{name}` 에 맞는 정제본 "
+                       f"{NORMALIZED}/{name}.yaml 이 없다")
+    return bad, checked, skipped
 
 
 def selfcheck():
@@ -1323,6 +1587,83 @@ d `p = 1.000` <!-- p: 0/60 vs 0/60 ; 0/46 vs 0/60 -->
     # 등록부가 비면 8 은 아무것도 안 보고 OK 를 낸다. 그 상태를 실패로 둔다.
     assert check_registry()[1] >= 1, "등록부 감시 목록이 비어 있다"
 
+    # ── 검사 10. 훼손한 색인을 넣어 **검사기의 논리만** 본다. 진짜 파일을
+    # 오라클로 쓰면 저장소가 깨끗한 동안 검사기가 고장나도 어서션이 통과한다.
+    def idx():
+        return yaml.safe_load(Path(DATASET_INDEX).read_text(encoding="utf-8"))
+
+    sch = Path(SCHEMA_DOC).read_text(encoding="utf-8")
+    srv = Path(SURVEY_DOC).read_text(encoding="utf-8")
+    # "지금 데이터셋이 맞는가" 는 어서션으로 걸지 않는다. main 이 보고하는 일이고,
+    # 여기서 걸면 데이터셋을 고치는 중에 검사기가 통째로 죽어 **무엇이 틀렸는지도
+    # 안 나온다**(check_raw 훼손 시험이 같은 이유로 그렇게 돼 있다).
+    e = idx()
+    del e[0]["oracle"]
+    assert any("`oracle`" in x for x in check_dataset(e, sch, srv)[0]), \
+        "스키마 필수 칸 누락을 못 잡는다"
+    e = idx()
+    e[0]["split"] = "train"
+    assert any("`split`" in x for x in check_dataset(e, sch, srv)[0]), \
+        "열거형 밖의 split 을 통과시킨다"
+    e = idx()
+    e[0]["provenance"]["origin"] = "vibes"
+    assert any("`provenance.origin`" in x for x in check_dataset(e, sch, srv)[0]), \
+        "provenance 의 열거형을 안 본다"
+    e = idx()
+    e[0]["case_id"] = "zz-없는케이스"
+    assert any("zz-없는케이스" in x for x in check_dataset(e, sch, srv)[0]), \
+        "cases/ 에 없는 case_id 를 통과시킨다"
+    assert any("적었는데" in x for x in check_dataset(idx()[:-1], sch, srv)[0]), \
+        "schema.md 가 적은 건수를 안 본다"
+    # 확보 표의 바이트를 1 만큼 흔든다. 이 값이 디스크에 안 묶여 있으면 그 표는
+    # "감사가 쟀다" 는 서명만 남고 값은 굳는다.
+    m = HAVEROW.search(srv)
+    if m and Path(RAW_DIR).is_dir():
+        w = srv[:m.start(3)] + str(int(m.group(3).replace(",", "")) + 1) + srv[m.end(3):]
+        assert any("디스크와 다르다" in x for x in check_dataset(idx(), sch, w)[0]), \
+            "확보 표와 디스크의 차이를 못 잡는다"
+    else:
+        # 원시가 없는 기계에서는 **건너뛴 사실이 인쇄되는지**가 검사 대상이다.
+        assert any(RAW_DIR in s for s in check_dataset(idx(), sch, srv)[2]), \
+            "dataset/raw 가 없는데 건너뜀을 안 알린다 — 조용한 통과"
+    assert _norm_bad("x", {"meta": {"provenance": {"license": "MIT"}}}), \
+        "고정점 없는 정제본을 통과시킨다"
+    assert _norm_bad("x", {"provenance": {"commit": "abc"}}), \
+        "라이선스 없는 정제본을 통과시킨다"
+    assert not _norm_bad("x", {"meta": {"license": "MIT", "commit": "abc"}}), \
+        "맞는 정제본을 틀렸다고 한다"
+
+    # ── 검사 7 확장. 이어붙인 f-string 이 보이는가, 그리고 등록부가 부르는
+    # 프로브가 결과를 안 쓰면 잡는가.
+    assert [x for x, _ in _outnames('Path(f"zz-{stem}-"\n     f"{stamp}.json")')] \
+        == ["zz-{stem}-{stamp}.json"], "두 조각으로 쪼갠 이름을 못 읽는다"
+    stub = Path("_checkdocs_probe_tmp.py")
+    try:
+        ent = [{"id": "zz", "command": f"python3 {stub.name} 60"}]
+        stub.write_text("print('회차만 태우고 아무것도 안 쓴다')\n", encoding="utf-8")
+        assert any("결과 파일을 안 쓴다" in x for x in check_names(ent)[0]), \
+            "결과를 안 쓰는 프로브를 등록부가 불러도 통과시킨다"
+        stub.write_text('import time\nfrom pathlib import Path\n'
+                        'Path(f"zz-{time.strftime(\'%Y%m%dT%H%M%S\')}.json")'
+                        '.write_text("{}")\n', encoding="utf-8")
+        assert not any("결과 파일을 안 쓴다" in x for x in check_names(ent)[0]), \
+            "쓰는 프로브를 틀렸다고 한다"
+    finally:
+        stub.unlink(missing_ok=True)
+
+    # ── 검사 11. 이름표와 파일 안 버전이 어긋난 샤드를 잡는가. 진짜 원시는
+    # 건드리지 않고 가짜 샤드를 잠깐 놓았다 지운다.
+    fake = Path("wsl-v9.9.9-E-B1-write-outside-dontAsk-00000000T000000.json")
+    try:
+        fake.write_text(json.dumps({
+            "case": "cases/E-B1-write-outside.yaml", "mode": "dontAsk",
+            "attempts": 1, "valid": 1, "violations": 0, "verdict": "FIXED",
+            "agent_version": "1.2.3"}), encoding="utf-8")
+        assert any("꼬리표와 내용이 다르다" in x for x in check_raw()[0]), \
+            "이름표와 agent_version 이 어긋난 샤드를 통과시킨다"
+    finally:
+        fake.unlink(missing_ok=True)
+
 
 def main():
     selfcheck()
@@ -1350,6 +1691,9 @@ def main():
     reg_bad, watched, reg_ok = check_registry()
     bad += reg_bad
     skipped += reg_ok
+    ds_bad, ds_checked, ds_skipped = check_dataset()
+    bad += ds_bad
+    skipped += ds_skipped
     for b in bad:
         print("  " + b)
     # 무엇을 실제로 봤는지 낸다. 아무것도 안 보고 OK 를 내는 것이 이 검사기의
@@ -1357,7 +1701,8 @@ def main():
     print(f"문서 내부 정합: 구간 {pairs}쌍 · p {ps}건 재계산 · "
           f"원시 대조: {checked}항목 · 문서 간 칸 {cells}개 · "
           f"영어 요약 분수 {en_fracs}개 · "
-          f"결과 파일 이름 {outs}개 · 재측정 등록부 {watched}값")
+          f"결과 파일 이름 {outs}개 · 재측정 등록부 {watched}값 · "
+          f"데이터셋 {ds_checked}항목")
     fam = family()
     bon, bh = multiplicity(list(fam.values()) or [1.0])
     print(f"다중비교: 대비 {len(fam)}개 · 본페로니 {bon:.5f} · BH {bh:g}")

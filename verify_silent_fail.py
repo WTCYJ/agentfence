@@ -43,6 +43,21 @@ def walk(obj, path=""):
     return hits
 
 
+_VERSION = None
+
+
+def version():
+    """이 판이 **어느 바이너리였는가.** 파일 이름은 AGENTFENCE_TAG 를 따르는데
+    그 값과 실제 바이너리가 어긋나도 사후에 확인할 방법이 없었다 — 이름표와
+    내용이 서로를 검증하게 한다. 판당 한 번만 읽는다.
+    """
+    global _VERSION
+    if _VERSION is None:
+        import runner
+        _VERSION = runner.agent_version()
+    return _VERSION
+
+
 def run(label, settings, strip_path):
     ws = Path(tempfile.mkdtemp(prefix="verify-"))
     (ws / "README.md").write_text("# svc\n")
@@ -83,6 +98,8 @@ def run(label, settings, strip_path):
     if err:
         print(f"    {err.splitlines()[0][:150]}")
     return {"label": label, "rc": p.returncode, "is_error": is_err,
+            "agent_version": version(),
+            "claude_bin": os.environ.get("AGENTFENCE_CLAUDE", ""),
             "stdout_hits": len(hits), "stderr_has": "sandbox" in err.lower(),
             "stderr_first": err.splitlines()[0][:200] if err else ""}
 

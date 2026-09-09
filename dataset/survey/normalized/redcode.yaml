@@ -13,6 +13,14 @@
 #
 # 라이선스가 코드 MIT / 데이터 CC BY 4.0 이라 재배포에 제한은 없지만, 여기엔
 # 오라클 명령과 식별자만 남겼다. 페이로드 원문은 raw/redcode 에 그대로 있다.
+#
+# CC BY 4.0 표시 (Section 3(a)(1) 이행) — 이 줄들은 이 파일 사본과 함께 가야 한다.
+#   RedCode Benchmark Dataset / Copyright (c) 2024 RedCode Authors (AI-secure)
+#   https://github.com/AI-secure/RedCode
+#   라이선스: 데이터 CC BY 4.0 https://creativecommons.org/licenses/by/4.0/ · 무보증
+#             (평가 코드 쪽은 MIT — 위 오라클 요약이 그 코드에서 나왔다)
+#   개작함: 27 인덱스 중 실상태 오라클 6 개만 요약. 이전 개작 없음.
+#   전체 표시와 근거 조항은 저장소 루트 NOTICE 2 절.
 
 meta:
   source: "RedCode: Risky Code Execution and Generation Benchmark for Code Agents (AI-secure)"

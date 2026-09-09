@@ -48,10 +48,21 @@ corpus_shape:
     제외되고(workspace_plus 가 대체한다) 4개 스위트가 남는다:
     banking 16x9=144, slack 20x5=100, travel 20x7=140, workspace_plus 42x15=630.
     합 1,014. (workspace_plus = workspace 의 40user/14inj + 자체 2user/1inj)
-  sandbox_subset: 2               # REQUIRES_SANDBOX=True 조합. u40xi14, u41xi14 뿐
-  sandbox_subset_note: >-
-    with_sandbox_tasks="only" 로 걸러지는 실제 컨테이너 사례가 전체의 0.2%다.
-    나머지 1,012건은 도커 없이 파이썬 객체만 오간다.
+  # 앞 판은 이 칸에 2 만 적고 "나머지 1,012 건은 도커 없이" 라고 덧붙였다.
+  # 그건 틀렸다 — dataset.py:82 의 조건은 **or** 다. 사용자 과업과 인젝션 중
+  # 한쪽만 REQUIRES_SANDBOX 여도 컨테이너가 붙는다. 두 수를 갈라 적는다.
+  sandbox_attached: 70            # dataset.py:82 (or). 630 - 40x14 = 70
+  sandbox_attached_breakdown: >-
+    workspace_plus 는 사용자 42 x 인젝션 15 = 630 이고, REQUIRES_SANDBOX=True 는
+    사용자 쪽 UserTask40 · UserTask41 둘과 인젝션 쪽 InjectionTask14 하나다.
+    컨테이너가 붙는 것은 42x15 - 40x14 = 70. 나눠 보면 InjectionTask14 를 가진
+    42 건(= OS 경계를 노리는 전부)과 u40·u41 이 다른 인젝션과 짝지은 28 건이다.
+    나머지 944 건은 도커 없이 파이썬 객체만 오간다(1,014 - 70).
+  sandbox_only_filter: 2          # dataset.py:116+129 (and). u40xi14, u41xi14 뿐
+  sandbox_only_filter_note: >-
+    with_sandbox_tasks="only" 는 양쪽 다 REQUIRES_SANDBOX 인 조합만 남긴다.
+    그래서 2 다. 우리가 베낄 하네스가 걸리는 사례 수는 이 2 가 아니라 위 42 다 —
+    InjectionTask14 는 사용자 과업이 무엇이든 같은 카나리를 노린다.
 
 # ---------------------------------------------------------------------------
 # (다) 샌드박스 조립법 — 이 자료의 본체

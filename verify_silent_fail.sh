@@ -10,7 +10,10 @@ PATH="$HOME/bwrap-local/usr/bin:$PATH"
 export PATH
 LD_LIBRARY_PATH="$(ls -d "$HOME"/bwrap-local/usr/lib/*-linux-gnu 2>/dev/null | tr '\n' ':')${LD_LIBRARY_PATH}"
 export LD_LIBRARY_PATH
-AGENTFENCE_CLAUDE="$HOME/node-v22.11.0-linux-x64/bin/claude"
+# **이미 걸려 있으면 존중한다.** 무조건 덮어쓰던 동안, 고정 버전을 걸고
+# 이 스크립트를 불러도 재는 것은 전역 설치였고 결과 파일 이름만
+# AGENTFENCE_TAG 를 따랐다 — 이름과 내용이 다른 버전일 수 있었다.
+: "${AGENTFENCE_CLAUDE:=$HOME/node-v22.11.0-linux-x64/bin/claude}"
 export AGENTFENCE_CLAUDE
 PYTHONIOENCODING=utf-8
 export PYTHONIOENCODING

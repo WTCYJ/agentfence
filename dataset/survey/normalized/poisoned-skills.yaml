@@ -6,6 +6,15 @@
 #       정제본에 원문을 심으면 이 저장소 자체가 AV 에 걸린다.
 #   (2) 우리가 쓰는 것은 페이로드 문장이 아니라 "어떤 OS 경계를 겨냥하는가"
 #       라는 축이다. 본문이 필요하면 upstream_id 로 원본을 그 자리에서 열어라.
+#
+# CC BY 4.0 표시 (Section 3(a)(1) 이행) — 이 줄들은 이 파일 사본과 함께 가야 한다.
+#   PoisonedSkills / https://doi.org/10.5281/zenodo.19281322
+#   라이선스: CC BY 4.0 https://creativecommons.org/licenses/by/4.0/ · 무보증
+#             (Zenodo 레코드 메타의 선언뿐이고 zip 안에 라이선스 파일이 없다)
+#   저작자: 상류가 제공한 이름이 "annoymous"(원문 오타, 익명 심사용 아티팩트)라
+#           확정 불가. 3(a)(2)·3(a)(3) 에 따라 위 DOI 로 대신한다 — 인용처가
+#           확정되면 갱신할 것. NOTICE 5 절에 미해결로 올려 두었다.
+#   개작함: front matter 분포와 겨냥 경계 축만 추출. 이전 개작 없음.
 
 provenance:
   source_url: https://doi.org/10.5281/zenodo.19281322

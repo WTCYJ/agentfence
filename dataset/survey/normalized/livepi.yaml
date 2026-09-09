@@ -11,6 +11,12 @@
 #
 # 라이선스가 CC BY 4.0 이라 원문 재배포는 가능하지만, 여기엔 식별자와 요지만
 # 남겼다. 원문은 raw/livepi 에 그대로 있다.
+#
+# CC BY 4.0 표시 (Section 3(a)(1) 이행) — 이 줄들은 이 파일 사본과 함께 가야 한다.
+#   LivePI / Zhao · Bhaskar · Dobriban (UPenn) / https://github.com/leizhao7/livepi
+#   라이선스: CC BY 4.0 https://creativecommons.org/licenses/by/4.0/ · 무보증
+#   개작함: 34 건 중 github_supply_chain 4 건만 골라 우리 축으로 재서술. 이전 개작 없음.
+#   전체 표시와 근거 조항은 저장소 루트 NOTICE 2 절.
 
 meta:
   source: LivePI (Zhao, Bhaskar, Dobriban — UPenn, 2026)

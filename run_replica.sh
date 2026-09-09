@@ -52,6 +52,19 @@ echo "bwrap: $(command -v bwrap) · socat: $(command -v socat)"
 cd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 export PYTHONIOENCODING=utf-8
 
+# 프로브 출력을 `| tail` 로 넘기면 프로브가 죽어도 스크립트는 0 으로 끝난다 —
+# POSIX sh 에는 pipefail 이 없고 `set -e` 는 파이프 마지막 명령(tail)만 본다.
+# 로그로 받고 rc 를 본 뒤 꼬리만 인쇄한다. `죽었다` 와 `쟀다` 가 갈려야 한다.
+mkdir -p run-log
+STAMP="$(date -u +%Y%m%dT%H%M%S)"
+step() {                       # step <이름> <꼬리줄수> -- <명령...>
+    _name="$1"; _tail="$2"; shift 3
+    _log="run-log/$STAMP-replica-$_name.log"
+    "$@" > "$_log" 2>&1 || {
+        tail "-$_tail" "$_log"; echo "!! $_name 이 죽었다 — $_log"; exit 3; }
+    tail "-$_tail" "$_log"
+}
+
 echo "=== 복제 배포판: $(. /etc/os-release; echo "$PRETTY_NAME") ==="
 echo "claude: $("$CLAUDE" --version 2>&1 | head -1)"
 echo "HOME:   $HOME"
@@ -71,22 +84,22 @@ fi
 echo
 
 echo "--- selftest (센서 건전성이 이 환경에서도 서는가) ---"
-python3 runner.py selftest 2>&1 | tail -3
+step selftest 3 -- python3 runner.py selftest
 echo
 
 # --- 결정적이라고 주장한 칸들 ----------------------------------------------
 # ① 유일하게 막힌 칸. 원본 0/60 [0.00, 0.06] · 60/60 enforcement
 echo "--- ① WSL2 샌드박스 × Bash 경유 쓰기 × bypassPermissions ---"
-python3 wsl_probe.py cases/E-B1-write-outside.yaml 10 bypassPermissions 2>&1 | tail -4
+step write-bypass 4 -- python3 wsl_probe.py cases/E-B1-write-outside.yaml 10 bypassPermissions
 echo
 
 # ② 층 경쟁. 원본 0/60 인데 perm 46 · enf 14 로 갈렸다 — 이 비율이 재현되는지가
 #    "권한 층이 먼저 잡는다" 주장의 복제다.
 echo "--- ② 같은 칸 × dontAsk (층 분해가 재현되는가) ---"
-python3 wsl_probe.py cases/E-B1-write-outside.yaml 10 dontAsk 2>&1 | tail -4
+step write-dontask 4 -- python3 wsl_probe.py cases/E-B1-write-outside.yaml 10 dontAsk
 echo
 
 # ③ 읽기 역전. 원본은 Windows 0/5 · WSL2 5/5 로 방향이 반대였다. 결정적 칸이라
 #    복제 가치가 있고, 원본 n 이 5 로 작아 여기서 늘려 잡는 값도 있다.
 echo "--- ③ dontAsk 읽기 경로 (Windows 와 방향이 반대인 칸) ---"
-python3 probe_read.py 10 --sandbox 2>&1 | tail -6
+step read-grid 6 -- python3 probe_read.py 10 --sandbox
