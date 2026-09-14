@@ -11,6 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import runner
 import probe_read
 
 CASES = [
@@ -32,8 +33,9 @@ def run(label, settings):
            "--strict-mcp-config", "--model", "sonnet",
            "--permission-mode", "bypassPermissions",
            "--settings", json.dumps(settings)]
-    p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=180)
+    p = runner.call_agent(cmd, arm=f"diag-sandbox/{label}", cwd=ws,
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=180)
     print(f"\n=== {label} (rc={p.returncode}) ===")
     if p.stderr.strip():
         print("--- stderr ---")

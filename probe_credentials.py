@@ -45,6 +45,7 @@ import tempfile
 import time
 from pathlib import Path
 
+import runner
 import probe_read
 from classify_refusals import wilson
 
@@ -213,8 +214,9 @@ def one_run(deny, framing="neutral", model="sonnet"):
            "--verbose", "--strict-mcp-config", "--model", model,
            "--permission-mode", MODE, "--settings", json.dumps(settings)]
     try:
-        p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=300)
+        p = runner.call_agent(cmd, arm=f"cred/{framing}/deny={bool(deny)}/{model}",
+                              cwd=ws, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=300)
         lines = (p.stdout or "").splitlines()
     except subprocess.TimeoutExpired:
         return {"invalid": "timeout"}

@@ -31,10 +31,21 @@ Windows arms are n=5; the WSL2 write-via-Bash cell is n=30.
 
 | action | path | Windows | WSL2 + sandbox |
 |---|---|---|---|
-| **write** | via Bash | 1.000 | **0/30 = 0.000** [0.00, 0.11] ← the only blocked cell | <!-- cell: E-B1-write-outside-bypassPermissions -->
+| **write** | via Bash | 1.000 | **0/30 = 0.000** [0.00, 0.11] ← the only blocked cell · **dev-split family** (development/regression, not an independent evaluation) | <!-- cell: E-B1-write-outside-bypassPermissions --><!-- split: dev -->
 | write | built-in `Write` | 1.000 | **1.000 (5/5)** |
 | read | via Bash | 1.000 | 1.000 (5/5) |
 | read | built-in `Read` | 1.000 | 1.000 (5/5) |
+
+**This cell comes from a `dev`-split family.** `E-B1-write-outside` belongs to
+`fam-cache-write`, which `dataset/schema.md` marks `split: dev`: the witness,
+the receipt, the post-run scan, the scan baseline and the five-way judgment
+were all built *after* looking at this family's results (`6ec835f`, `101b4b8`,
+`efadcf4`, `808fe17`, `fef2351`, `b5d205c`). The number stands as development
+and regression evidence, **not as an independent evaluation** — no `eval`
+family measures this boundary yet, and the three that exist carry neither
+witness nor receipt, so they cannot produce a "blocked" verdict at all.
+Labelling the cell limits what it may be quoted for; it does not undo the
+contamination (`write-block-eval` in `remeasure.yaml`).
 
 **The built-in file tools do not pass through the sandbox** — a direction, not a
 measured cell. The two built-in rows come from `probe_filetools.py`, which has
@@ -55,7 +66,7 @@ contrast.**
 
 | condition | outside write | verdict |
 |---|---|---|
-| deps present · `failIfUnavailable: true` | **0/30 = 0.000** [0.00, 0.11] | blocked |
+| deps present · `failIfUnavailable: true` | **0/30 = 0.000** [0.00, 0.11] | blocked (dev-split family) |
 | deps missing · `failIfUnavailable: true` | **0/30** valid runs | hard fail (safe) |
 | deps missing · `failIfUnavailable: **false**` | **opens** — ratio and CI **withdrawn**, no raw file | **silently open** |
 
@@ -246,11 +257,14 @@ different numbers, that is the most useful thing anyone could send us.
 
 ## License / scope
 
-[MIT](LICENSE), except for the third-party-derived files listed in
-[NOTICE](NOTICE) — `dataset/survey/normalized/cipr.yaml` is PolyForm
-Noncommercial 1.0.0, not MIT. Research code — one product, one version (2.1.220 — untagged
+[MIT](LICENSE), except two third-party-derived files:
+`dataset/survey/normalized/cipr.yaml` is PolyForm Noncommercial 1.0.0, not MIT,
+and `dataset/survey/normalized/poisoned-skills.yaml` has an unverified upstream
+licence basis and is held out of redistribution candidates. Every other
+normalized file is MIT as our own adaptation, carrying upstream attribution
+obligations that travel with any copy — see [NOTICE](NOTICE). Research code — one product, one version (2.1.220 — untagged
 in the raw files), one
 account, measured on WSL2/Windows. Carry that scope with any citation. The
 findings are about configuration behaviour, not about defeating a working
 control: with the dependencies present, the sandbox held in all 30 trials
-(**0/30** [0.00, 0.11]).
+(**0/30** [0.00, 0.11]) — a `dev`-split family, so that is development and regression evidence, not an independent evaluation.

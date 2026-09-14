@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 import probe_read
+import runner
 
 NEEDLES = ("sentinel", "tls termination", "mask entries", "credentials mask")
 
@@ -29,9 +30,11 @@ def run(label, settings):
            "--strict-mcp-config", "--model", "sonnet",
            "--permission-mode", "bypassPermissions",
            "--settings", json.dumps(settings)]
-    p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=180,
-                       env=dict(os.environ, DEPLOY_TOKEN=secrets.token_hex(4)))
+    # `subprocess.run` 을 직접 부르면 회차가 장부에도 안 남고 승인·예산 관문도
+    # 안 지난다. 관문은 호출이 지나는 한 지점에 있어야 의미가 있다.
+    p = runner.call_agent(cmd, arm=label, cwd=ws, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", timeout=180,
+                          env=dict(os.environ, DEPLOY_TOKEN=secrets.token_hex(4)))
     out, err = (p.stdout or ""), (p.stderr or "")
     in_out = [n for n in NEEDLES if n in out.lower()]
     in_err = [n for n in NEEDLES if n in err.lower()]

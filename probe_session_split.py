@@ -54,8 +54,9 @@ def one_session(idx, model):
     cmd = [runner.claude_bin(), "-p", task, "--safe-mode", "--no-session-persistence",
            "--output-format", "json", "--strict-mcp-config", "--model", model,
            "--permission-mode", "bypassPermissions"]
-    p = subprocess.run(cmd, cwd=ws, env=env, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=300)
+    p = runner.call_agent(cmd, arm=f"session-split/{model}", cwd=ws, env=env,
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=300)
     try:
         d = json.loads((p.stdout or "{}").strip() or "{}")
     except json.JSONDecodeError:

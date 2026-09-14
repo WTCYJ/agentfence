@@ -210,12 +210,36 @@ curl -sL https://api.figshare.com/v2/articles/30111988/files | python3 -c "impor
 ```
 
 위 명령의 커밋·해시는 `comparison.md` 1 절 표와 `normalized/*.yaml` 에서 왔다.
-정제본에서 그 값이 어디 있는지는 파일마다 다르다 — bipia · deeptrap ·
-inspect-evals-agentdojo · malicious-agent-skills-bench · poisoned-skills ·
-redteamcua 는 최상위 `provenance`, agentcanary · cipr · livepi · redcode 는
-최상위 `meta`, aishelljack 은 `meta.provenance` 다. 키 이름도 갈린다
-(`source_url` 대 `repo`, `obtained` 대 `collected`). 스키마를 한 벌로 모으는 것은
-아직 안 했다.
+
+## 정제본 스키마 v1
+
+11 개 정제본 전부 최상위 `schema_version: 1` 과 최상위 `provenance` **한 갈래**다.
+출처 칸 이름은 `source_url` · `commit`(고정점이 커밋이 아니면 `upstream_version`
+또는 `file_md5` + `file_bytes`) · `obtained`(받은 날) · `local_path` ·
+`checkout`(받은 범위) · `license` 이고, 자료마다 필요한 칸(`record_api` ·
+`files_on_disk` · `reverified` 같은 것)은 같은 블록에 그대로 둔다.
+
+`cases[]` 는 `dataset/schema.md` 의 사례 층 스키마를 따른다 — 필수 13 칸과
+`provenance` 7 칸, 그리고 열거값(`origin: external` · `dataset_type` ·
+`split` · `expected_policy.outcome`)이다. 사례 층의 `collected` 는 파일 층의
+`obtained` 와 다른 날짜다(`dataset/schema.md` — 전자는 저장소에 케이스가 처음
+커밋된 날, 후자는 원본을 받은 날). 이름을 갈라 놓은 것은 그래서다.
+
+아직 비어 있는 칸이 있다. `verified_by` 가 agentcanary · aishelljack · cipr ·
+livepi · redcode 다섯에 없고, 파일 층 `what_it_does_not_test` 가 agentcanary ·
+livepi · redcode 셋에 없다(사례 층에는 있다). **지어내지 않고 비워 두었다** —
+채우려면 확보 당시 무엇을 열어 봤는지를 사람이 짚어야 한다.
+
+2026-09-10 이전 판은 최상위 `provenance` 6 · 최상위 `meta` 4 · `meta.provenance`
+1 로 갈려 있었고 키 이름도 `repo` · `collected` · `raw_path` · `raw_size` ·
+`arxiv` 로 달랐다. 값은 그대로 옮겼고 개명 내역은 `migrate_normalized.py` 의
+`RENAME` 표에 있다. 같은 회차에 고친 표기 셋: 사례 층 `origin` 이 열거값이
+아니라 자료 이름이었고(17 건), `expected_policy.outcome: block` 이 열거값
+`deny` 가 아니었고(16 건), `X-cipr-control-clean-repo` 의 `dataset_type` 이
+`kind` 축 값인 `control` 이었다(`benign` 으로 정정). 그리고 agentcanary 의
+`X-canary-chain-revshell-bashrc` 는 스스로 "옮기지 않는다"고 적어 놓고
+`cases` 에 앉아 필수 칸 둘이 비어 있었다 — `not_ported` 로 옮겼고 레코드
+자체는 한 글자도 안 지웠다. 그래서 승격 후보는 18 이 아니라 **17** 이다.
 
 주의: PoisonedSkills 를 풀면 Windows Defender 가 `V910/SKILL.md` 를
 `Trojan:NPM/Stealer.HBH!MTB` 로 격리한다(3회 재현). 그래서 디스크 1,069 / zip

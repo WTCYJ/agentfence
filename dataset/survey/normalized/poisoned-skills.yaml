@@ -8,30 +8,76 @@
 #       라는 축이다. 본문이 필요하면 upstream_id 로 원본을 그 자리에서 열어라.
 #
 # CC BY 4.0 표시 (Section 3(a)(1) 이행) — 이 줄들은 이 파일 사본과 함께 가야 한다.
-#   PoisonedSkills / https://doi.org/10.5281/zenodo.19281322
+#   Supply-Chain Poisoning Attacks Against LLM Coding Agent Skill Ecosystems
+#   (PoisonedSkills) / https://doi.org/10.5281/zenodo.19281322 · arXiv:2604.03081
+#   예치물 제목은 논문 제목과 다르다. 3(a)(1)(A)(ii) 가 요구하는 "supplied" 제목은
+#   DOI 등록 레코드의 titles[0] 이므로 그것도 같이 싣는다 —
+#   "PoisonedSkills: Exploiting Implicit Trust in LLM Coding Agent Skill Ecosystems"
 #   라이선스: CC BY 4.0 https://creativecommons.org/licenses/by/4.0/ · 무보증
-#             (Zenodo 레코드 메타의 선언뿐이고 zip 안에 라이선스 파일이 없다)
-#   저작자: 상류가 제공한 이름이 "annoymous"(원문 오타, 익명 심사용 아티팩트)라
-#           확정 불가. 3(a)(2)·3(a)(3) 에 따라 위 DOI 로 대신한다 — 인용처가
-#           확정되면 갱신할 것. NOTICE 5 절에 미해결로 올려 두었다.
+#             (Zenodo 레코드 메타와 DOI 등록 레코드가 같은 선언을 하지만 **둘 다
+#              레코드 수준**이고, zip 안에는 라이선스 파일이 없다)
+#   저작자: 상류가 지정한 표기 그대로 "annoymous"(원문 오타, 익명 심사용
+#           아티팩트)를 싣는다. 3(a)(1)(A)(i) 이 저작자 식별을 "가명 지정을
+#           포함해" licensor 가 요청한 방식대로 유지하라고 하므로, 오타를
+#           고치지 않는 것이 곧 이행이다. 실명을 지어내지 않는다.
+#           인용처 방침은 NOTICE 5 절.
 #   개작함: front matter 분포와 겨냥 경계 축만 추출. 이전 개작 없음.
+#
+# **배포에서 뺐다 — 적용 범위 미확정.** 2026-09-10 에 DOI 등록 레코드(DataCite)
+# 원시 응답을 캡처해 레코드 수준 선언은 근거에 묶였다. 그러나 그것도 레코드 수준이고
+# zip 안 1,070 개 SKILL.md 각각에 CC BY 가 붙는지는 갈리지 않는다. 아래
+# distribution.commercial 이 unverified 인 이유다 — 캡처가 생겼다는 사실만으로는
+# 안 내린다.
+# 판정 어휘와 처리 절차는 NOTICE 1 절 · 6 절.
+
+schema_version: 1
+
+# 상업 배포 후보 판정 — 기계가 읽는 자리. 값 어휘는 NOTICE 6 절.
+distribution:
+  commercial: unverified        # allowed | excluded | unverified
+  why: >-
+    레코드 수준 선언은 2026-09-10 DOI 등록 레코드 원시 캡처로 근거에 묶였다(license.registry_evidence_file). 그래도 상류가 zip 안 파일 각각에 CC BY 를 적용했다는 근거는 아직 없다 — zip 에 라이선스 파일이 없고 레코드에 파일 단위 rights 가 없다. 적용 범위가 갈릴 때까지 상업·비상업 배포 후보 양쪽에서 뺀다(NOTICE 1 절)
 
 provenance:
   source_url: https://doi.org/10.5281/zenodo.19281322
   record_api: https://zenodo.org/api/records/19281322
   commit: none                     # Zenodo 정적 배포물이라 커밋 해시가 없다.
   file_md5: 08da7feb103d0ab2b2e12b4f5f567f3a   # 레코드 메타데이터와 내려받은 zip 이 일치
+  file_sha256: 241ab288483ed77af2357f967c4018a59f5a407d5432b14ab6fc61a7cb33ad63
+                                   # 우리가 2026-09-10 에 잰 값. 상류가 md5 만
+                                   # 주므로 대조는 md5 로 하고, 사본 식별은 이쪽으로
   file_bytes: 1253687
   publication_date: "2026-03-28"   # 레코드 metadata.publication_date
   obtained: "2026-09-09"
   local_path: dataset/raw/poisoned-skills
   license:
     id: cc-by-4.0                  # 레코드 metadata.license.id
-    license_file: 없음              # zip 안에 LICENSE/COPYING 파일이 하나도 없다
-    attribution_target: 불안정      # creators[0].name 이 "annoymous"(원문 오타),
+    license_file: 없음              # zip 안에 LICENSE/COPYING 파일이 하나도 없다.
+                                   # 2026-09-10 재확인 — 엔트리 2,157 개 이름을
+                                   # 전수 대조했고 라이선스류는 0 건이다
+    evidence_file: 없음             # Zenodo 레코드 API 원시 응답 캡처는 아직 없다.
+                                   # 받으면 여기에
+                                   # dataset/survey/evidence/zenodo-19281322.json
+    registry_evidence_file: dataset/survey/evidence/datacite-10.5281-zenodo.19281322.json
+                                   # DOI 등록 레코드 원시 응답(DataCite API,
+                                   # 2026-09-10 수집, 4,128 B,
+                                   # sha256 668745132e613194a4b0b77053e2b47cf600d7ae8a77d2bb53a4b1bb9b6e0455).
+                                   # data.attributes.rightsList[0] =
+                                   # rightsIdentifier cc-by-4.0 · SPDX ·
+                                   # https://creativecommons.org/licenses/by/4.0/legalcode
+    scope: 레코드 수준               # 위 근거 둘 다 DOI/레코드에 붙은 선언이다.
+                                   # DataCite 레코드의 sizes·formats 가 비어 있고
+                                   # 파일 단위 rights 가 없어서, zip 안 1,070 개
+                                   # SKILL.md 각각에 CC BY 가 붙는지는 안 갈린다.
+                                   # 이것이 unverified 가 남는 이유다
+    reverified: "2026-09-10 갈렸다 — zenodo.org 는 여전히 막혔다(api/records HTTP 504 ×4, OAI-PMH 504 ×1, 연결 실패 ×2). 같은 호스트에서 example.com·creativecommons.org·raw.githubusercontent.com 은 200 이므로 우리 망 문제가 아니다. 반면 doi.org 가 302 로 이 레코드를 가리키고 api.datacite.org 가 200 을 줘서 DOI 등록 레코드 쪽으로 근거를 묶었다(registry_evidence_file)"
+    attribution_target: 불안정      # creators[0].name 이 "annoymous"(원문 오타 —
+                                   # 2026-09-10 캡처에도 그대로다: nameType
+                                   # Personal, familyName 도 "annoymous"),
                                    # code:codeRepository 는 anonymous.4open.science.
                                    # 익명 심사용 아티팩트라 인용처가 확정되면 갱신할 것
-  paper: 없음                       # zip 에 논문 PDF·README 가 들어 있지 않다
+  paper_in_zip: 없음                # zip 에 논문 PDF·README 가 들어 있지 않다
+  paper: "Supply-Chain Poisoning Attacks Against LLM Coding Agent Skill Ecosystems — arXiv:2604.03081 (dataset/survey/verified.json 에서 확인한 값이다. zip 안에는 없다)"
   verified_by: >-
     zip md5 대조 + 1,070개 전수 파싱(front matter 키 분포·크기 분포) +
     V786_poc 11개 파일 직접 열람. 데이터셋의 스크립트는 하나도 실행하지 않았다.

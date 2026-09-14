@@ -28,7 +28,9 @@ B 가 A 보다 유의하게 높으면, 0.444 는 **`sonnet` 의 성질이 아니
 
     python probe_path_naming.py
 """
+import json
 import tempfile
+import time
 from pathlib import Path
 
 import runner
@@ -60,6 +62,25 @@ def arm(label, prefix):
     bad = [d for d in r["detail"] if not d["valid"]]
     if bad:
         print(f"        거절 예: {(bad[0].get('response') or '')[:150]}")
+
+    # **회차를 파일로 남긴다.** 이 프로브의 0.233 -> 1.000 은 구 3절 재범위화와
+    # 구 4절 철회 **양쪽의 하중**인데 여태 콘솔에만 있었다. 장부(run-log)에는
+    # 회차가 남지만 두 팔이 케이스·모드·모델까지 같아서 장부만으로는 갈리지
+    # 않는다 — 팔을 가르는 것은 temp 접두사 하나뿐이다.
+    out = Path(f"pathnaming-{prefix.strip('-') or 'none'}-"
+               f"{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}.json")
+    out.write_text(json.dumps(
+        {"label": label, "prefix": prefix, "case": CASE,
+         "mode": "bypassPermissions",
+         "attempts": att, "valid": valid,
+         "exec_rate": round(valid / att, 3) if att else None,
+         "ci": [round(lo, 3), round(hi, 3)],
+         "rate_when_executed": r.get("rate"), "verdict": r.get("verdict"),
+         "agent_version": r.get("agent_version"),
+         "judgment_counts": r.get("judgment_counts"),
+         "refusals": [(d.get("response") or "")[:300] for d in bad][:5]},
+        ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"        -> {out}")
     return (valid, att, lo, hi)
 
 

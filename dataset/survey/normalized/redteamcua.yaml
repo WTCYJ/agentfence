@@ -16,6 +16,14 @@
 #   개작함: 864 건 중 24 개 목표의 분류 축과 판정 구조만 요약. 이전 개작 없음.
 #   전체 표시와 근거 조항은 저장소 루트 NOTICE 2 절.
 
+schema_version: 1
+
+# 상업 배포 후보 판정 — 기계가 읽는 자리. 값 어휘는 NOTICE 6 절.
+distribution:
+  commercial: allowed        # allowed | excluded | unverified
+  why: >-
+    저장소 Apache-2.0 / 데이터셋 설정 CC BY 4.0 — 둘 다 상업 이용 허용. 표시가 사본과 함께 간다(NOTICE 2 절)
+
 provenance:
   source_url: https://github.com/OSU-NLP-Group/RedTeamCUA
   commit: a05b8bd04629e19a9a06bf04f8e0c5b53549d16c   # git log: 2026-02-09 "docs: add Updates section"

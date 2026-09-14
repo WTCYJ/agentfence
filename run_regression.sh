@@ -34,7 +34,102 @@
 # 한 판을 60 회로 키우면 한도에 걸렸을 때 그 판이 통째로 INVALID 로 죽는다 —
 # 실제로 그렇게 죽은 판이 저장소에 있다. 나눠 돌면 앞의 샤드가 남고, 같은
 # 명령을 다시 부르면 모자란 만큼만 채운다.
+#
+# ## 종료코드 규약 — **실행 완료 여부와 보안 결과 판정은 다른 축이다**
+#
+# 예전에는 프로브가 0 이 아니면 전부 "죽었다" 로 보고 `exit 3` 으로 스크립트를
+# 끝냈다. 그래서 ② 가 유효하게 미재현했을 뿐인데 ③ 이 통째로 안 돌았고, 반대로
+# `|| echo` 형태로 감싼 자리는 프로브가 죽어도 0 으로 끝났다. 둘 다 같은 원인 —
+# **종료코드 하나에 두 가지 뜻을 실었다.**
+#
+#   0    실행 완료. 판정은 결과 파일에 있다
+#   2    전제조건 미성립 — 이 호스트에서는 조건을 못 만든다. 재지 않았다
+#   3    유효한 미재현 — 돌았고 결과가 기대와 다르다. **결과이지 고장이 아니다**
+#   124  시간 초과 (`timeout` 래퍼를 쓸 때)
+#   그 외(1 · 4+ · 128+n)  실행기 오류
+#
+# 1 을 미재현에 쓰지 않는 이유: 파이썬이 예외로 죽어도 1 이다. 두 가지를 한
+# 코드에 실으면 처음 자리로 돌아간다.
+#
+# 항목별 결과는 `run-log/<시각>-status.jsonl` 에 한 줄씩 쌓고 **다음 항목을
+# 계속 돈다.** 스크립트의 종료코드는 "실행기 오류가 있었나" 만 말한다 —
+# 경계가 지켜졌는지는 결과 파일이 말한다.
 set -e
+
+LOGDIR="${LOGDIR:-run-log}"
+
+classify() {
+    case "$1" in
+        0)   echo "완료" ;;
+        2)   echo "조건미성립" ;;
+        3)   echo "미재현" ;;
+        124) echo "시간초과" ;;
+        *)   echo "실행기오류" ;;
+    esac
+}
+
+# 항목 하나를 돌고 결과를 분류해 남긴다. **죽지 않는다** — 분류해서 적고 돌아간다.
+#
+# 출력을 `| tail` 로 넘기지 않는 이유: POSIX sh 에는 pipefail 이 없고 `set -e` 는
+# 파이프의 **마지막** 명령만 본다. 그래서 프로브가 죽어도 파이프라인은 0 이 되고,
+# `|| echo` 대체 문구는 구조상 절대 안 뜬다. 로그 파일로 받고 rc 를 직접 본다.
+# `|| rc=$?` 가 붙어 있으므로 `set -e` 도 여기서 스크립트를 안 죽인다.
+item() {
+    id="$1"; shift
+    log="$LOGDIR/$STAMP-$id.log"
+    rc=0
+    "$@" > "$log" 2>&1 || rc=$?
+    outcome="$(classify "$rc")"
+    printf '{"item":"%s","rc":%s,"outcome":"%s","log":"%s","cmd":"%s"}\n' \
+        "$id" "$rc" "$outcome" "$log" "$*" >> "$STATUS"
+    echo "    [$id] rc=$rc -> $outcome  ($log)"
+    tail -16 "$log" 2>/dev/null || true
+    if [ "$outcome" = "실행기오류" ]; then
+        ERRORS=$((ERRORS + 1))
+    fi
+    # 한도(429)는 재시도로 안 풀린다. 남은 항목을 돌면 예산만 쓰고 분모에
+    # 미관측이 쌓인다. **다음 항목의 조건도 같으므로** 여기서 멈춘다.
+    if grep -q '429' "$log" 2>/dev/null; then
+        echo "    !! 한도(429) 흔적 — 남은 항목을 돌지 않는다"
+        STOP=429
+    fi
+    echo
+}
+
+# ── 오프라인 훅 ──────────────────────────────────────────────────────
+# 아래 둘은 **회차를 안 태운다.** 여기 있는 이유는 종료코드 분류와 항목 진행이
+# 이 스크립트 안에서만 사는 논리라서, 밖에서 베껴 시험하면 두 벌이 갈리기
+# 때문이다. `runner.py selftest` 가 이 훅으로 결함을 주입한다.
+if [ "$1" = "classify" ]; then
+    classify "$2"
+    exit 0
+fi
+
+if [ "$1" = "selftest" ]; then
+    # 가짜 프로브로 다섯 결함을 주입한다. `sh -c 'exit N'` 이라 비용 0 이다.
+    LOGDIR="$(mktemp -d)"
+    STAMP="selftest"
+    STATUS="$LOGDIR/status.jsonl"
+    ERRORS=0
+    STOP=""
+    : > "$STATUS"
+    item fake-ok       sh -c 'echo ran; exit 0'
+    item fake-norepro  sh -c 'echo 기대와 다르다; exit 3'
+    item fake-precond  sh -c 'echo 조건을 못 만든다; exit 2'
+    if [ "$2" != "clean" ]; then
+        item fake-crash    sh -c 'echo Traceback; exit 1'
+        item fake-timeout  sh -c 'echo 시간 초과; exit 124'
+    fi
+    # 앞 항목들이 죽었어도 여기까지 와야 한다. 안 오면 유효한 미재현 하나가
+    # 뒤 항목을 통째로 날린다는 뜻이다.
+    item fake-last     sh -c 'echo 마지막까지 왔다; exit 0'
+    echo "--- 주입 결과 ---"
+    cat "$STATUS"
+    rm -rf "$LOGDIR"
+    [ "$ERRORS" -eq 0 ] || exit 4
+    exit 0
+fi
+
 V="${1:?버전을 인자로 주세요 (예: 2.1.233)}"
 N_HEAD="${2:-60}"   # 헤드라인 칸 누적 목표. 예산이 없으면 줄여서 부르되,
                     # 줄인 n 은 그대로 해상도이므로 회귀표에 같이 적는다.
@@ -55,51 +150,67 @@ if [ -x "$HOME/node-v22.11.0-linux-x64/bin/node" ]; then
     export PATH
 fi
 
-# 프로브 출력을 `| tail` 로 넘기면 프로브가 죽어도 스크립트는 0 으로 끝난다 —
-# POSIX sh 에는 pipefail 이 없고 `set -e` 는 파이프 마지막 명령(tail)만 본다.
-# 그래서 `|| echo` 대체 문구도 **구조상 절대 안 뜬다.** 로그로 받고 rc 를 본다.
-mkdir -p run-log
+mkdir -p "$LOGDIR" || { echo "!! $LOGDIR 를 만들 수 없다 — 기록 없이 재지 않는다"; exit 5; }
 STAMP="$(date -u +%Y%m%dT%H%M%S)"
+STATUS="$LOGDIR/$STAMP-status.jsonl"
+: > "$STATUS" || { echo "!! $STATUS 에 못 쓴다 — 기록 없이 재지 않는다"; exit 5; }
+ERRORS=0
+STOP=""
+
+# 이 실행 전체를 한 장부에 묶는다. 중간에 끊겨 같은 명령을 다시 부르면
+# `runner` 가 같은 파일에 이어 붙이고 일련번호를 이어 세므로 회차가 중복
+# 집계되지 않는다.
+AGENTFENCE_RUN_ID="regress-$STAMP-v$V"
+export AGENTFENCE_RUN_ID
 
 echo "=== 회귀 측정 · $("$BIN" --version 2>&1 | head -1) ==="
 echo "    기준선은 2.1.220. 결과 파일에 v$V 꼬리표가 붙는다."
+echo "    실행 ID $AGENTFENCE_RUN_ID · 항목 결과 $STATUS"
 echo
 
 echo "--- 0. 이 버전으로 잴 수 있는가 ---"
+# **여기만 하드 게이트다.** 로그인이 만료됐거나 한도에 걸렸으면 아래 세 항목은
+# 전부 무효 회차를 태울 뿐이다. 미재현·조건 미성립과 달리 이건 "재면 안 되는"
+# 상태다.
 python3 preflight.py || { echo "!! preflight 실패 — 측정하지 않는다"; exit 2; }
 echo
 
 echo "--- ① fail-open 신호 (제보한 항목 · 이 호스트에서는 대개 게이트에 걸린다) ---"
 echo "    기준선: stdout 흔적 0건 · is_error=false · 경고는 stderr 에만"
 # 이 칸은 **의존이 시스템에 없는 호스트**에서만 성립한다. 주 배포판에는
-# /usr/bin/bwrap 이 있어서 조건이 안 만들어진다 — 프로브가 스스로 걸러낸다.
-LOG="run-log/$STAMP-silent-fail-v$V.log"
-rc=0
-python3 verify_silent_fail.py > "$LOG" 2>&1 || rc=$?
-tail -12 "$LOG"
-# rc=2 는 **조건 미성립**이다(이 호스트에는 /usr/bin/bwrap 이 있다). 그건
-# 실패가 아니라 "여기서는 못 잰다" 이므로 통과시키고, 나머지는 실패로 둔다.
-if [ "$rc" -eq 2 ]; then
-    echo "    (이 호스트에서는 못 잰다 — 복제 배포판에서 따로 돌린다)"
-elif [ "$rc" -ne 0 ]; then
-    echo "!! ① 이 죽었다 (rc=$rc) — $LOG"; exit 3
-fi
-echo
+# /usr/bin/bwrap 이 있어서 조건이 안 만들어진다 — 프로브가 스스로 걸러
+# 종료코드 2 를 낸다. 그건 실패가 아니라 "여기서는 못 잰다" 다.
+item "silent-fail-v$V" python3 verify_silent_fail.py
 
 echo "--- ② 강제 층 칸 (헤드라인) ---"
 echo "    기준선: 0/60 [0.00, 0.06] · 60/60 enforcement"
 echo "    10 회씩 나눠 돌아 $N_HEAD 회를 채운다. 중간에 죽어도 앞의 샤드는 남고,"
 echo "    같은 명령을 다시 부르면 이어 돈다."
-LOG="run-log/$STAMP-headline-v$V.log"
-python3 wsl_probe.py cases/E-B1-write-outside.yaml 10 bypassPermissions "$N_HEAD"     > "$LOG" 2>&1 || { tail -20 "$LOG"; echo "!! ② 가 죽었다 — $LOG"; exit 3; }
-tail -20 "$LOG"
-echo
+if [ -z "$STOP" ]; then
+    item "headline-v$V" python3 wsl_probe.py cases/E-B1-write-outside.yaml 10 \
+        bypassPermissions "$N_HEAD"
+else
+    echo "    (건너뜀 — $STOP)"; echo
+fi
 
 echo "--- ③ 커스텀 프록시가 허용 목록을 대체하는가 ---"
 echo "    기준선: 처치 팔 PP 5/5 · ITT 5/12 (2.1.220) -> PP 9/9 · ITT 9/12 (2.1.233)"
 echo "    대조 팔(프록시 없음)은 지금까지 **다른 프로브**에서 왔다 — 스킴·설정·"
 echo "    오라클까지 달랐다. axis 는 그 팔을 같은 스크립트에 넣고 교대로 돈다:"
 echo "    하중 12x2 + 게이트 5x2 = 34 회차."
-LOG="run-log/$STAMP-proxy-axis-v$V.log"
-python3 probe_proxy.py 12 axis     > "$LOG" 2>&1 || { tail -16 "$LOG"; echo "!! ③ 이 죽었다 — $LOG"; exit 3; }
-tail -16 "$LOG"
+if [ -z "$STOP" ]; then
+    item "proxy-axis-v$V" python3 probe_proxy.py 12 axis
+else
+    echo "    (건너뜀 — $STOP)"; echo
+fi
+
+echo "=== 항목별 결과 ==="
+cat "$STATUS"
+echo
+echo "장부: $LOGDIR/$AGENTFENCE_RUN_ID-ledger.jsonl"
+# **종료코드는 실행 완료 여부만 말한다.** 경계가 지켜졌는지는 결과 파일이 말한다.
+if [ "$ERRORS" -gt 0 ]; then
+    echo "!! 실행기 오류 $ERRORS 건 — 위 status 를 보라. 미재현·조건 미성립과는 다른 축이다"
+    exit 4
+fi
+echo "실행 완료. 판정은 결과 파일에 있다."

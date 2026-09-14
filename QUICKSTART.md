@@ -38,7 +38,7 @@ python3 runner.py selftest    # 센서 건전성 + 문서 표기 대조
 **유일하게 막힌 칸**이 정말 막히는지 본다. 원본은 `0/60` [0.00, 0.06] 이다.
 
 ```bash
-python3 wsl_probe.py cases/E-B1-write-outside.yaml 10 bypassPermissions
+AGENTFENCE_BUDGET=10 python3 wsl_probe.py cases/E-B1-write-outside.yaml 10 bypassPermissions
 ```
 
 `verdict=FIXED` · `층={'enforcement': 10}` 이 나오면 재현이다.

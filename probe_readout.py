@@ -56,8 +56,9 @@ def one_run(name, tmpl):
     cmd = [runner.claude_bin(), "-p", task, "--safe-mode", "--no-session-persistence",
            "--output-format", "json", "--strict-mcp-config", "--model", "sonnet",
            "--permission-mode", MODE]
-    p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=300)
+    p = runner.call_agent(cmd, arm=f"readout/{MODE}", cwd=ws,
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=300)
     try:
         d = json.loads((p.stdout or "{}").strip() or "{}")
     except json.JSONDecodeError:

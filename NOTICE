@@ -5,12 +5,16 @@ AGENTFENCE — NOTICE
 자료를 읽고 쓴 파생물이고, 그중 일부는 원본 라이선스가 MIT 로 재배포하는 것을
 허용하지 않거나 표시 의무를 요구한다. 그 목록이 아래다.
 
-English summary — the MIT license in ./LICENSE does not cover the files listed
-below. `dataset/survey/normalized/cipr.yaml` is derived from CIPR and is
-offered only under the PolyForm Noncommercial License 1.0.0; it is **not**
-sublicensed under MIT, and MIT's grant does not apply to it. The other listed
-files carry CC BY 4.0 or Apache-2.0 attribution obligations that travel with
-any copy.
+English summary — two files sit outside the MIT grant in ./LICENSE.
+`dataset/survey/normalized/cipr.yaml` is derived from CIPR and is offered only
+under the PolyForm Noncommercial License 1.0.0; it is **not** sublicensed under
+MIT. `dataset/survey/normalized/poisoned-skills.yaml` rests on a CC BY 4.0
+declaration that is now pinned to a captured DOI-registry response, but only at
+record level; whether it reaches the individual files inside the archive is
+still undetermined, so the file is held out of every redistribution candidate. Every other normalized file **is** offered under MIT as our own
+adaptation, and carries CC BY 4.0, Apache-2.0 or MIT attribution obligations
+that travel with any copy. Section 6 states the verdict per file in a
+machine-readable form.
 
 ---
 
@@ -36,6 +40,12 @@ md5), (나) 우리가 직접 센 규모·분포 값, (다) 우리 축(B1~B4 · �
 이 저장소는 "확인하지 않은 것을 확인했다고 적지 않는다"를 규율로 두는데, 라이선스
 쪽에서 그 규율의 대응물은 "권한이 애매하면 넓게 표시한다"이기 때문이다.
 
+**이 판정의 범위는 `normalized/*.yaml` 11 개다.** 같이 배포되는
+`dataset/survey/verified.json` 에도 상류 확인 근거로 짧은 축자 인용이 들어 있고
+(Dockerfile 한 줄 · 환경변수 몇 줄 · 셸 명령 한 줄 · 하네스 독스트링 조각),
+이번 정리는 그 파일을 감사 대상으로 삼지 않았다. `*.json` 원시를 라이선스 사유로
+편집해도 되는지가 저장소 규칙과 부딪히므로 **사람 판단으로 남긴다**(5 절).
+
 ## 1. MIT 가 적용되지 않는 파일
 
 ### `dataset/survey/normalized/cipr.yaml`
@@ -46,7 +56,9 @@ md5), (나) 우리가 직접 센 규모·분포 값, (다) 우리 축(B1~B4 · �
   (커밋 `d069c204`, 2026-09-01)
 - 원본 라이선스: PolyForm Noncommercial License 1.0.0
   https://polyformproject.org/licenses/noncommercial/1.0.0
-- 라이선스 전문을 직접 읽었다(`dataset/raw/cipr/LICENSE`). 근거 조항 셋:
+- 라이선스 전문을 직접 읽었다(`dataset/raw/cipr/LICENSE` — 이 저장소에는 없다,
+  4 절. 같은 문안이 https://polyformproject.org/licenses/noncommercial/1.0.0 에
+  있고 아래 조항은 그 판과 같다). 근거 조항 셋:
   - "Changes and New Works License" — 파생물 작성은 permitted purpose 안에서 허용.
   - "Distribution License" — 그 파생물의 배포도 허용.
   - "No Other Rights" — **서브라이선스와 이전(transfer)은 금지.** 루트 MIT 선언은
@@ -59,33 +71,98 @@ md5), (나) 우리가 직접 센 규모·분포 값, (다) 우리 축(B1~B4 · �
 - 이 저장소가 상업적 용도로 전환되면 `cipr.yaml` 은 permitted purpose 밖으로
   나간다. 그 시점에 이 파일을 들어내야 한다.
 
+### `dataset/survey/normalized/poisoned-skills.yaml` — 적용 범위 미확정, 배포에서 뺀다
+
+- 원본: PoisonedSkills, https://doi.org/10.5281/zenodo.19281322
+- 상류가 선언한 라이선스: CC BY 4.0. 그 선언이 레코드에 붙은 것인지 zip 안
+  1,070 개 SKILL.md 각각에도 붙는 것인지가 갈리지 않는 자리다.
+- **2026-09-10 — 근거 한 겹이 붙었다. 범위는 그대로 안 갈렸다.** 둘을 구분한다.
+  - 붙은 것: DOI 등록 레코드 원시 응답을
+    `dataset/survey/evidence/datacite-10.5281-zenodo.19281322.json` 으로
+    그대로 저장했다(DataCite API, 4,128 B, sha256 `66874513…`).
+    `data.attributes.rightsList[0]` 이 `rightsIdentifier: cc-by-4.0` ·
+    `rightsUri: https://creativecommons.org/licenses/by/4.0/legalcode` ·
+    `rightsIdentifierScheme: SPDX` 다. `creators[0].name` 은 `annoymous`
+    (2 절의 지정 가명이 등록 레코드에도 그대로 있다는 뜻이다).
+    `state: findable`, `registered: 2026-03-28T09:53:36Z`,
+    `relatedIdentifiers` 가 개념 DOI `10.5281/zenodo.19281321` 의
+    `IsVersionOf` 임을 적는다. 이제 선언이 산문이 아니라 **원시에 묶인다.**
+  - 안 갈린 것: 그 레코드도 **레코드 수준**이다. `sizes` · `formats` 가 비어
+    있고 파일 단위 rights 가 없다. zip 안에 라이선스 파일도 없다(엔트리
+    2,157 개 이름 전수 대조, 라이선스류 0 건). 그래서 **개별 SKILL.md 에
+    CC BY 가 적용되는가는 여전히 미확정이다.**
+- `https://zenodo.org/api/records/19281322` 는 아직 막혔다 — 2026-09-10 에
+  HTTP 504 네 차례 · OAI-PMH 504 한 차례 · 연결 실패 두 차례. 같은 호스트에서
+  `example.com` · `creativecommons.org` · `raw.githubusercontent.com` 이 200
+  이므로 **우리 망 문제가 아니다.** 다만 504 자체는 접근 실패이고 라이선스가
+  유효하다는 증거도 무효하다는 증거도 아니다.
+- 그래서 이 파일은 **미확정**으로 두고 상업·비상업 배포 후보 양쪽에서 뺀다
+  (정제본의 `distribution.commercial: unverified`, 6 절). 기록은 지우지
+  않는다 — 미확정은 근거를 아직 못 묶었다는 뜻이지 자료가 없다는 뜻이 아니고,
+  자료를 지우면 다음 사람이 같은 확인을 처음부터 다시 해야 한다.
+- 닫는 방법은 둘 중 하나다. (가) Zenodo 가 응답할 때 레코드 API 응답을 그대로
+  `dataset/survey/evidence/zenodo-19281322.json` 으로 저장해 **파일 수준
+  메타**(`files[].key` 별 라이선스 여부)를 본다. (나) 상류에 물어 zip 안
+  파일에 CC BY 가 적용되는지 답을 받는다. **캡처가 생겼다는 사실만으로
+  `unverified` 를 내리지 않는다** — 그건 범위 문제를 접근 문제로 바꿔 치는 것이다.
+- 예치물 제목이 논문 제목과 다르다(등록 레코드 `titles[0]` =
+  "PoisonedSkills: Exploiting Implicit Trust in LLM Coding Agent Skill
+  Ecosystems"). 3(a)(1)(A)(ii) 는 "supplied" 제목을 요구하므로 정제본 머리에
+  둘을 같이 실었다.
+
 ## 2. CC BY 4.0 유래분 — 표시 의무가 붙는 파일
 
-CC BY 4.0 법률 전문(`dataset/raw/redcode/dataset/LICENSE` 에 동봉된 판)을 직접
-읽었다. Section 3(a)(1) 이 요구하는 것은 저작자 표시 · 저작권 고지 · 라이선스
+CC BY 4.0 법률 전문(`dataset/raw/redcode/dataset/LICENSE` 에 동봉된 판 — 이
+저장소에는 없다, 4 절. 같은 문안이
+https://creativecommons.org/licenses/by/4.0/legalcode.en 에 있고 아래 인용은
+2026-09-10 그 판에서 대조했다)을 직접 읽었다. Section 3(a)(1) 이 요구하는 것은 저작자 표시 · 저작권 고지 · 라이선스
 고지 · 면책 고지 · 원본 URI, 그리고 **개작 여부 표시**다. 아래가 그 이행이다.
 Section 3(a)(2) 는 매체에 맞는 합리적 방법이면 된다고 하므로, 표시는 이 파일과
 각 정제본 머리 두 곳에 둔다.
 
 무보증 고지 — 아래 자료는 각 원본 라이선스가 정한 대로 **무보증**으로 제공된다.
 
+우리 개작물의 라이선스 — `poisoned-skills.yaml`(1 절)을 뺀 이 절의 정제본은
+우리 개작물로서 루트 MIT 로 제공된다. MIT 위에 아래 표시 의무가 얹히고 그 의무는
+사본과 함께 간다. 4.0 3(b) 가 "Adapter's License 는 수령자가 이 공용 라이선스를
+이행하는 것을 막아서는 안 된다" 고 정하는데 MIT 는 이 표시를 막지 않으므로 이
+배치가 적법하다.
+
 | 파일 | 원본(Title / Author / Source) | 라이선스 | 우리가 무엇을 바꿨나 |
 |---|---|---|---|
 | `normalized/livepi.yaml` | LivePI / Zhao · Bhaskar · Dobriban (UPenn) / https://github.com/leizhao7/livepi `d48d3fa4` | CC BY 4.0 (`LICENSE`·`LICENSE-DATA`) — https://creativecommons.org/licenses/by/4.0/ | 개작함. 34 건 중 `github_supply_chain` 4 건만 골라 우리 축(B1/B2 · 오라클 · 대조군)으로 재서술했다. 페이로드 본문은 옮기지 않았다 |
 | `normalized/redcode.yaml` | RedCode Benchmark Dataset / Copyright (c) 2024 RedCode Authors (AI-secure) / https://github.com/AI-secure/RedCode `c84b6db8` | 데이터 CC BY 4.0 (`dataset/LICENSE`), 코드 MIT (`LICENSE`) — https://creativecommons.org/licenses/by/4.0/ | 개작함. 27 개 인덱스 중 실상태 오라클 6 개(2·4·6·8·9·18)의 판정·복구 구조만 요약하고 나머지는 뺐다. 페이로드 본문은 옮기지 않았다 |
 | `normalized/redteamcua.yaml` | RedTeamCUA / OSU-NLP-Group / https://github.com/OSU-NLP-Group/RedTeamCUA `a05b8bd0` | 저장소 Apache-2.0, 데이터셋 설정 CC-BY-4.0 (`croissant_metadata.json` 의 `license`) | 개작함. 864 건 중 24 개 적대 목표의 분류 축과 "양성 성공 / 실제 피해" 판정 구조만 요약했다. 사례 본문은 옮기지 않았다 |
-| `normalized/poisoned-skills.yaml` | PoisonedSkills / 상류 표기가 `annoymous`(원문 오타, 익명 심사용 아티팩트) / https://doi.org/10.5281/zenodo.19281322 | CC BY 4.0 — Zenodo 레코드 `metadata.license.id` 의 **선언뿐이고 zip 안에 라이선스 파일이 없다** | 개작함. 1,070 개 SKILL.md 에서 front matter 분포와 겨냥 경계 축만 뽑았다. 본문은 옮기지 않았다(V910 은 Windows Defender 가 격리한다) |
-| `normalized/aishelljack.yaml` | AIShellJack replication package / 동봉 패키지에 저작권 표시 줄이 없다 / https://doi.org/10.6084/m9.figshare.30111988 (v4), arXiv:2509.22040 | **충돌** — 동봉 `LICENSE` 는 Apache-2.0, figshare 아티클 메타데이터는 CC BY 4.0. 더 구체적인 동봉본(Apache-2.0)을 따르되 양쪽을 다 밝힌다 | 개작함. 314 개 페이로드에서 식별자·ATT&CK 기법·실행기·의존성 유무만 뽑았다. 실행 명령과 `input_arguments` 는 옮기지 않았다 |
+| `normalized/poisoned-skills.yaml` | Supply-Chain Poisoning Attacks Against LLM Coding Agent Skill Ecosystems (PoisonedSkills) / 상류 표기가 `annoymous`(원문 오타, 익명 심사용 아티팩트 — 지정 표기이므로 고치지 않는다) / https://doi.org/10.5281/zenodo.19281322 · arXiv:2604.03081 | CC BY 4.0 — 선언은 2026-09-10 DOI 등록 레코드 원시 캡처로 근거에 묶였다(`evidence/datacite-10.5281-zenodo.19281322.json`). 그래도 **레코드 수준이고 zip 안에 라이선스 파일이 없어** 파일 단위 적용은 **미확정 → 배포에서 뺐다**(1 절 · 6 절) | 개작함. 1,070 개 SKILL.md 에서 front matter 분포와 겨냥 경계 축만 뽑았다. 본문은 옮기지 않았다(V910 은 Windows Defender 가 격리한다) |
+| `normalized/aishelljack.yaml` | AIShellJack replication package / 동봉 패키지에 저작권 표시 줄이 없다 / https://doi.org/10.6084/m9.figshare.30111988 (v4), arXiv:2509.22040 | **충돌** — 동봉 `LICENSE` 는 Apache-2.0(1 행 "Apache License", 11,357 B), DOI 등록 레코드는 CC BY 4.0. 앞 판은 "figshare 아티클 메타데이터" 라고만 적었고 그 근거가 확보 파일에 없었다 — 2026-09-10 에 등록 레코드 원시 응답을 `evidence/datacite-10.6084-m9.figshare.30111988.json` 으로 캡처해 묶었다(`rightsList[0]` cc-by-4.0, 레코드 수준). 더 구체적인 동봉본(Apache-2.0)을 따르되 양쪽을 다 밝힌다 | 개작함. 314 개 페이로드에서 식별자·ATT&CK 기법·실행기·의존성 유무만 뽑았다. 실행 명령과 `input_arguments` 는 옮기지 않았다 |
 
-저작자 이름을 못 적은 두 건은 **비워 두지 않고 사유를 적었다.** CC BY 4.0
-3(a)(1)(a) 는 "licensor 가 함께 제공한 경우 유지하라"이고, 두 건은 제공된 이름이
-없거나(AIShellJack) 익명 문자열이다(PoisonedSkills). 같은 조 3(a)(2)·3(a)(3) 에
-따라 원본 URI 로 대신한다. 확정되면 갱신할 것.
+저작자 표기가 통상적이지 않은 두 건은 **비워 두지 않고 상류가 준 그대로 실었다.**
+3(a)(1)(A)(i) 은 저작자 식별을 "licensor 가 요청한 합리적 방식대로(**가명 지정을
+포함해** — 원문 "including by pseudonym if designated")" 유지하라고 한다.
+PoisonedSkills 의 `annoymous`(원문 오타)는 licensor 가 지정한 표기이므로 **그
+문자열을 그대로 두는 것이 곧 이행이다.** 오타를 `anonymous` 로 "고치면" 지정
+표기를 훼손한다. AIShellJack 은 동봉 패키지에 저작권 표시 줄 자체가 없어 유지할
+이름이 아예 없고, 3(a)(1)(A)(v) 의 원본 URI 로 식별을 보완한다. 3(a)(2) 는 이
+배치(이 표 + 각 정제본 머리)가 매체에 맞는 합리적 방법임을 허용한다. 없는
+저작자를 지어내지 않는다.
+
+앞 판이 근거로 든 **3(a)(3) 은 오인용이었다.** 원문은 "If requested by the
+Licensor, You must remove any of the information required by Section 3(a)(1)(A)"
+— licensor 가 요청하면 표시를 **제거하라**는 조항이고, 표시를 URI 로 갈음하는
+근거가 아니다(2026-09-10 법률 전문에서 대조). 같은 오인용을
+`poisoned-skills.yaml` · `aishelljack.yaml` · `dataset/external.md` 에서 함께
+걷어냈다. 실질 준수 상태는 전과 같다 — 문자열은 처음부터 보존돼 있었고 근거
+설명만 틀렸다.
+
+익명 아티팩트에서 나온 것을 공개 산출물에 싣는가는 라이선스 문제가 아니라
+방침이다. 5 절에 있다.
 
 ## 3. Apache-2.0 · MIT 유래분
 
 재배포 자체에 제한이 없고 우리가 원문을 옮기지도 않았다. 출처는 각 정제본
-`provenance` 에 있고, 여기에는 표시 의무가 실제로 걸리는 것만 적는다.
+`provenance` 에 있고, 여기에는 표시 의무가 실제로 걸리는 것만 적는다. 이 절의
+정제본도 우리 개작물로서 루트 MIT 로 제공되며, 상류의 저작권 고지 의무
+(MIT 의 유일한 조건 · Apache-2.0 §4)가 그 위에 얹혀 사본과 함께 간다.
 
 | 파일 | 원본 | 라이선스 | 비고 |
 |---|---|---|---|
@@ -94,7 +171,9 @@ Section 3(a)(2) 는 매체에 맞는 합리적 방법이면 된다고 하므로,
 | `normalized/deeptrap.yaml` | DeepTrap / Copyright (c) 2026 ZJUICSR / `ZJUICSR/DeepTrap` `8de1579b` | MIT | 조건은 저작권 고지뿐 |
 | `normalized/inspect-evals-agentdojo.yaml` | Inspect Evals / Copyright (c) 2024 UK AI Security Institute / `UKGovernmentBEIS/inspect_evals` `3e572ec4` | MIT | 상류의 상류인 원 AgentDojo(ETH SRI Lab, arXiv:2406.13352)가 원본 `NOTICE` 에 없다. 원본 쪽 문제이고 우리는 정제본에 출처를 적어 둔다 |
 | `normalized/malicious-agent-skills-bench.yaml` | MaliciousAgentSkillsBench / Copyright (c) 2025 MaliciousAgentSkillsBench Contributors / `protectskills/MaliciousAgentSkillsBench` `f7d28b1a` | MIT | 라벨 집계만 옮겼다 |
+| `normalized/aishelljack.yaml` 의 기법 색인 314 행 | Atomic Red Team / Copyright (c) 2018 Red Canary, Inc. / https://github.com/redcanaryco/atomic-red-team | MIT | AIShellJack 이 물려받은 상류다. `name` · `auto_generated_guid` · 원본 파일명 314 건이 상류 원문 그대로라 MIT 의 유일한 조건인 저작권 고지가 실제로 걸린다. 2026-09-10 대조 — guid `8b87dd03-8204-478c-bac3-3959f6528de3` 와 이름 "Delay execution with ping" 이 상류 `atomics/T1497.003/T1497.003.yaml` 4-5 행에 그대로 있고(2026-09-10 `raw.githubusercontent.com` master 판에서 다시 대조했다), `LICENSE.txt` 는 1 행이 빈 줄이고 2 행이 "The MIT License" · 4 행이 "Copyright (c) 2018 Red Canary, Inc." 다(앞 판이 "첫 줄" 이라 적은 것을 행 번호로 고친다). **AIShellJack 이 어느 ART 커밋에서 뽑았는지는 확보 파일에 없다** — 대조 대상은 master 의 현재 판이다 |
 | `normalized/cipr.yaml` | 위 1 절 참조 | PolyForm Noncommercial 1.0.0 | MIT 아님 |
+| `normalized/poisoned-skills.yaml` | 위 1 절 참조 | CC BY 4.0 선언(미확인) | 배포에서 뺐다 |
 
 ## 4. 저장소에 없는 것
 
@@ -103,11 +182,49 @@ Section 3(a)(2) 는 매체에 맞는 합리적 방법이면 된다고 하므로,
 
 ## 5. 아직 안 정한 것
 
-- **Atomic Red Team 상류 라이선스가 `unknown` 이다.** `aishelljack.yaml` 의 기법
-  목록은 test_guid 와 테스트 이름을 Atomic Red Team 에서 물려받은 것으로 보이는데,
-  확보한 파일 안에 그 상류의 라이선스 근거가 없다
-  (`dataset/survey/search-log.md` 가 같은 항목을 두 번의 감사에서 `unknown` 으로
-  내렸다). 추정으로 채우지 않는다.
-- **PoisonedSkills 의 표시 대상**이 미확정이다. 위 2 절 참조. 이 자료에서 나온
-  것을 공개 산출물(README · 아티팩트 · 발표 원고)에 실으려면 인용처부터 정해야
-  한다.
+- **닫힘(2026-09-10) — Atomic Red Team 상류 라이선스.** 더 이상 `unknown` 이
+  아니다. 상류 `LICENSE.txt` 가 MIT(Copyright (c) 2018 Red Canary, Inc.)이고,
+  `aishelljack.yaml` 의 guid 와 테스트 이름이 상류 원문에 그대로 있는 것을
+  대조했다. 3 절 표로 옮겼다. 남는 단서 하나 — **AIShellJack 이 어느 ART
+  커밋에서 뽑았는지는 확보 파일에 없다.** 추정으로 채우지 않는다.
+- **부분 닫힘 — PoisonedSkills.** 2026-09-10 에 선언을 원시 캡처로 묶었지만
+  (1 절) **적용 범위는 아직 레코드 수준**이라 배포에서 뺀 상태는 그대로다
+  (1 절 · 6 절). CC BY 표시 자체는 `annoymous` 를 원문 그대로 보존하는 것으로
+  이미 이행돼 있다(2 절). **남은 것 둘** — (가) 파일 단위 적용 여부(1 절의 닫는
+  방법 가·나), (나) 사람이 정할 방침이다. 방침 쪽은 익명 심사용
+  아티팩트에서 나온 것을 공개 산출물(README · 아티팩트 · 발표 원고)에 싣는가.
+  이건 라이선스가 아니라 인용 방침 문제라 코드로 못 닫는다.
+- **사람 판단 — `dataset/survey/verified.json` 의 축자 인용.** 0 절 참조. 그중
+  PoisonedSkills 하네스 코드 조각은 상류에 OSI 라이선스가 없다
+  (`dataset/external.md` 가 "코드는 벤더링 불가, 설계만 참고" 라고 적은 그
+  코드다). `*.json` 원시를 라이선스 사유로 편집해도 되는지가 저장소 규칙과
+  부딪히므로 이번에는 손대지 않았다. 원시로 볼 것인가 문서로 볼 것인가를
+  사람이 정해야 한다.
+
+## 6. 상업 배포 후보 — 기계가 읽는 자리
+
+경로 목록을 여기 한 벌 더 적으면 두 벌이 갈린다. 그래서 **판정은 각 정제본이
+직접 들고 있다.** `dataset/survey/normalized/*.yaml` 마다 최상위 `distribution`
+블록이 있고 `commercial` 값은 셋 중 하나다.
+
+| 값 | 뜻 | 상업 배포 시 |
+|---|---|---|
+| `allowed` | 상류가 상업 이용을 허용한다. 표시 의무는 따라간다 | 넣는다 |
+| `excluded` | 상류 라이선스가 상업 이용을 금지한다 | **들어낸다** |
+| `unverified` | 상류가 그 파일에 그 라이선스를 실제로 적용했다는 근거가 우리 손에 없다 | **들어낸다.** 상업·비상업 양쪽 |
+
+2026-09-10 현재 `allowed` 가 아닌 것은 둘이다.
+
+    dataset/survey/normalized/cipr.yaml             excluded     (1 절)
+    dataset/survey/normalized/poisoned-skills.yaml  unverified   (1 절)
+
+`dataset/raw/` 는 `.gitignore` 로 애초에 배포되지 않는다(4 절). 상업 배포로
+전환할 때 위 두 파일과 함께 `dataset/raw/cipr` 도 들어낸다.
+
+다음 단계가 걸 검사(여기서는 검사기를 안 건드렸다): 11 개 정제본 전부
+`distribution.commercial` 을 갖는가 · 값이 위 셋 안인가 · `allowed` 가 아닌
+파일이 루트 `LICENSE` 의 예외 블록과 이 절 목록 **양쪽**에 이름으로 있는가 ·
+`normalized/*.yaml` 에 `3(a)(3)` 이 **하나도 없는가**(정정 이력은 이 문서와
+`dataset/external.md` 의 정정 문단에만 남긴다 — 두 파일의 등장 횟수가 각각
+2 회 · 1 회를 넘으면 근거로 다시 선 것이다) · `annoymous` 가 오타째 살아
+있는가 · MIT 본문이 정본과 바이트 동일한가.

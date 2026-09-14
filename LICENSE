@@ -1,13 +1,26 @@
 SCOPE — READ FIRST
 
-The MIT license below applies to this repository EXCEPT for the files listed
-in ./NOTICE, which are derived from third-party sources under their own terms.
-In particular, dataset/survey/normalized/cipr.yaml is offered only under the
-PolyForm Noncommercial License 1.0.0 and is NOT sublicensed under MIT.
+The MIT license below applies to this repository EXCEPT these two files:
+
+  dataset/survey/normalized/cipr.yaml
+      PolyForm Noncommercial License 1.0.0 only, NOT sublicensed under MIT.
+  dataset/survey/normalized/poisoned-skills.yaml
+      Upstream licence basis unverified (re-check failed 2026-09-10, HTTP 504).
+      We grant no licence over it and hold it out of every redistribution
+      candidate until the upstream declaration is captured.
+
+Every other file under dataset/survey/normalized/ IS offered under the MIT
+license below, as our own adaptation of third-party material. MIT does not
+lift the attribution obligations those upstreams impose — those travel with
+any copy. ./NOTICE lists them file by file, and section 6 there states the
+redistribution verdict in a machine-readable form.
 Nothing below grants any right the copyright holder does not hold.
 
-아래 MIT 는 이 저장소에 적용되되, `NOTICE` 에 열거한 외부 유래 파일은 제외한다.
-특히 `dataset/survey/normalized/cipr.yaml` 은 MIT 가 아니다.
+아래 MIT 는 이 저장소에 적용되되 **위 두 파일은 제외한다.** `dataset/survey/
+normalized/` 의 나머지 정제본은 우리 개작물로서 MIT 로 제공되고, 그 위에
+`NOTICE` 가 열거한 상류의 표시 의무가 얹혀 사본과 함께 간다. 상업 배포 후보에서
+무엇을 빼야 하는지는 각 정제본의 `distribution` 필드와 `NOTICE` 6 절에 기계가
+읽는 형태로 있다.
 
 --- MIT license (unmodified) begins here ---
 

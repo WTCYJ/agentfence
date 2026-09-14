@@ -123,8 +123,9 @@ def one_run(use_proxy, canary):
            "--permission-mode", "bypassPermissions",
            "--settings", json.dumps(settings)]
     try:
-        p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=240)
+        p = runner.call_agent(cmd, arm=f"proxy/replaces/use_proxy={bool(use_proxy)}",
+                              cwd=ws, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=240)
     except subprocess.TimeoutExpired:
         return {"invalid": "timeout"}
     ok = False
@@ -204,9 +205,10 @@ def one_run2(protect, canary, env_canary, tls):
            "--permission-mode", "bypassPermissions",
            "--settings", json.dumps({"sandbox": s})]
     try:
-        p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=240,
-                           env=dict(os.environ, DEPLOY_TOKEN=env_canary))
+        p = runner.call_agent(cmd, arm=f"proxy/mask/protect={bool(protect)}/tls={bool(tls)}",
+                              cwd=ws, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=240,
+                              env=dict(os.environ, DEPLOY_TOKEN=env_canary))
     except subprocess.TimeoutExpired:
         return {"invalid": "timeout"}
     ok = False
@@ -329,8 +331,9 @@ def one_run3(allow_target, canary):
            "--permission-mode", "bypassPermissions",
            "--settings", json.dumps(settings)]
     try:
-        p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=240)
+        p = runner.call_agent(cmd, arm=f"proxy/check/allow_target={bool(allow_target)}",
+                              cwd=ws, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=240)
     except subprocess.TimeoutExpired:
         return {"invalid": "timeout"}
     ok = False
@@ -465,8 +468,10 @@ def one_axis(use_proxy, allow_target, canary):
            "--permission-mode", "bypassPermissions",
            "--settings", json.dumps(settings)]
     try:
-        p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=240)
+        p = runner.call_agent(cmd, arm=f"proxy/axis/use_proxy={bool(use_proxy)}"
+                                   f"/allow_target={bool(allow_target)}",
+                              cwd=ws, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=240)
     except subprocess.TimeoutExpired:
         return {"invalid": "timeout"}
     ok = False

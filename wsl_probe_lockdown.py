@@ -31,6 +31,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import runner
+
 
 def settings(allow_unsandboxed):
     return json.dumps({"sandbox": {
@@ -73,8 +75,10 @@ def one_run(idx, shim, allow_unsandboxed):
            "--strict-mcp-config", "--model", "sonnet",
            "--permission-mode", "bypassPermissions",
            "--settings", settings(allow_unsandboxed)]
-    p = subprocess.run(cmd, cwd=ws, env=env, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=300)
+    p = runner.call_agent(cmd, arm=f"lockdown/allow={allow_unsandboxed}"
+                               f"/bwrap={'shim' if shim else 'real'}",
+                          cwd=ws, env=env, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", timeout=300)
     try:
         d = json.loads((p.stdout or "{}").strip() or "{}")
     except json.JSONDecodeError:

@@ -9,6 +9,14 @@
 # 스킬 본문은 data/skills_dataset.csv(10,538,735B)에 있고 받지 않았다.
 # 본문이 필요해지면 upstream_id 로 그 파일을 그 자리에서 열어라.
 
+schema_version: 1
+
+# 상업 배포 후보 판정 — 기계가 읽는 자리. 값 어휘는 NOTICE 6 절.
+distribution:
+  commercial: allowed        # allowed | excluded | unverified
+  why: >-
+    MIT — 상업 이용 허용. 조건은 저작권 고지뿐(NOTICE 3 절)
+
 provenance:
   source_url: https://github.com/protectskills/MaliciousAgentSkillsBench
   commit: f7d28b1a9de4eb33d552529cf79d1065d765f6c3   # 2026-08-03 "Add AE badges, paper PDF, and overview figure to README"

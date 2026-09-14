@@ -109,7 +109,7 @@ f-string 으로 위조된다는 것이다(`comparison.md` 본표 #19 와 3.1 절
 | Inspect Evals | MIT | `LICENSE`(UK AISI) | 상류 AgentDojo/ETH 가 `NOTICE` 에 없다(원본 문제, 기록됨) |
 | LivePI | CC BY 4.0 | `LICENSE` · `LICENSE-DATA` (README 배지 MIT 는 틀림) | 4 — 아래 (1) |
 | MaliciousAgentSkillsBench | MIT | `LICENSE` 첫 줄 | 5 — 아래 (5) |
-| PoisonedSkills | 데이터 CC BY 4.0(선언만) / 하네스 코드 라이선스 없음 | Zenodo 레코드 메타. **zip 안에 라이선스 파일 없음** | 1 · 6 — 아래 (2). 코드는 OSI 라이선스가 없어 벤더링 불가, 설계만 참고 |
+| PoisonedSkills | 데이터 CC BY 4.0(선언만) / 하네스 코드 라이선스 없음 | Zenodo 레코드 메타. **zip 안에 라이선스 파일 없음.** 2026-09-10 재확인 HTTP 504 → **미확인, 배포에서 뺐다**(`NOTICE` 1·6 절) | 1 · 6 — 아래 (2). 코드는 OSI 라이선스가 없어 벤더링 불가, 설계만 참고 |
 | RedCode | 코드 MIT / 데이터 CC BY 4.0 | `LICENSE` + `dataset/LICENSE` | 4 — 아래 (1) |
 | RedTeamCUA | Apache-2.0 / 데이터셋 설정 CC-BY-4.0 | `LICENSE` + croissant 메타 | 4 — 아래 (1) |
 
@@ -137,15 +137,26 @@ AgentCanary(`NOTICE`) · Inspect Evals(`NOTICE`). 나머지 4 건은 데이터 �
    라이선스 고지 · 면책 고지 · 원본 URI)과 3(a)(1)(b) 의 개작 표시를 확인했다.
    이행은 두 곳에 뒀다 — 루트 `NOTICE` 2 절의 표와, 다섯 정제본 각각의 머리
    주석. 3(a)(2) 가 "매체에 맞는 합리적 방법" 을 허용하므로 이 배치로 충분하다.
+   (전문은 이 저장소에 없다 — `raw/` 는 배포하지 않는다. 같은 문안이
+   https://creativecommons.org/licenses/by/4.0/legalcode.en 에 있고 위 인용은
+   2026-09-10 그 판에서 대조했다.)
    정제본이 파일 단위로 복사돼 나가는 물건이라 머리 주석 쪽을 뺄 수 없다.
-2. **부분 — PoisonedSkills 의 표시 대상.** 라이선스 기계적 요구는 닫혔다:
-   3(a)(1)(a) 는 "licensor 가 함께 제공한 경우 유지" 이고 제공된 이름이
-   `annoymous`(원문 오타)뿐이므로, 3(a)(2)·3(a)(3) 에 따라 DOI
-   `10.5281/zenodo.19281322` 로 대신한다(`poisoned-skills.yaml` 머리에 적었다).
-   **남은 것은 사람이 정할 방침이다** — 익명 심사용 아티팩트에서 나온 것을
-   공개 산출물(README · 아티팩트 · 발표 원고)에 싣는가. 선택지 셋:
-   (가) 인용처가 확정될 때까지 이 자료 유래분을 공개 산출물에서 뺀다,
-   (나) DOI 표시만으로 싣고 확정되면 갱신한다, (다) 저자에게 연락해 확정한다.
+2. **부분 — PoisonedSkills 의 표시 대상과 근거.** 표시 쪽 기계적 요구는
+   닫혔다. 다만 앞 판의 근거 인용이 틀렸어서 2026-09-10 고쳤다 —
+   3(a)(1)(A)(i) 이 저작자 식별을 "in any reasonable manner requested by the
+   Licensor (**including by pseudonym if designated**)" 로 정하므로,
+   `annoymous`(원문 오타)는 licensor 가 지정한 표기이고 **그대로 두는 것이 곧
+   이행**이다. DOI 로 "대신" 하는 것이 아니다. 함께 인용했던 3(a)(3) 은
+   오인용이었다 — "licensor 가 요청하면 표시를 제거하라" 는 조항이라 이 맥락에
+   해당이 없다. `NOTICE` · 정제본 머리에서 걷어냈다.
+   **근거 쪽은 새로 열렸다.** 상류가 그 zip 에 CC BY 를 실제로 적용했다는
+   근거가 Zenodo 레코드 메타 하나뿐이고 2026-09-10 재확인이 HTTP 504 로
+   실패했다. 그래서 이 정제본을 `distribution.commercial: unverified` 로 두고
+   배포 후보에서 뺐다(`NOTICE` 1 절 · 6 절). 이건 **게시(배포) 제한이지 원인
+   해결이 아니다** — 닫으려면 Zenodo API 응답을
+   `dataset/survey/evidence/zenodo-19281322.json` 으로 캡처해야 한다.
+   **그것과 별개로 인용처 방침은 여전히 사람 몫이다** — 익명 심사용
+   아티팩트에서 나온 것을 공개 산출물(README · 아티팩트 · 발표 원고)에 싣는가.
    `NOTICE` 5 절에 미해결로 올려 뒀다.
 3. **닫힘 — CIPR 의 비상업 조항과 루트 `LICENSE` 의 관계.** PolyForm
    Noncommercial 1.0.0 전문(`raw/cipr/LICENSE`)을 직접 읽었다. "Changes and New
@@ -179,13 +190,17 @@ AgentCanary(`NOTICE`) · Inspect Evals(`NOTICE`). 나머지 4 건은 데이터 �
    정제본 값으로 채웠다. "없음" 이 가리키던 사실(로컬에 `.git` 이 없다 — 클론이
    아니라 파일 두 개를 직접 받았다)은 괄호로 남겼다. 함께 받은 `LICENSE` 파일에는
    바이트만 있고 해시가 없다 — 그건 그대로다.
-6. **열림(새로 세는 라이선스 빈칸) — Atomic Red Team 상류 라이선스가 `unknown`
-   이다.** `normalized/aishelljack.yaml` 의 기법 목록은 test_guid 와 테스트
-   이름을 Atomic Red Team 에서 물려받은 것으로 보이는데, 확보한 13 파일 안에
-   그 상류의 라이선스 근거가 없다. `survey/search-log.md` 가 같은 항목을 두 번의
-   감사에서 `unknown` 으로 내렸다. 앞 판 목록이 다섯이라 적은 것은 이 항목을
-   external.md 로 안 옮겼기 때문이지 없어서가 아니다. 추정으로 채우지 않는다 —
-   상류를 확정하려면 Atomic Red Team 저장소의 `LICENSE` 를 직접 열어야 한다.
+6. **닫힘(2026-09-10) — Atomic Red Team 상류 라이선스.** 앞 판이 `unknown` 으로
+   내렸던 항목이다. `normalized/aishelljack.yaml` 의 기법 색인은 test_guid 와
+   테스트 이름을 Atomic Red Team 에서 물려받았고, 확보한 13 파일 안에는 그
+   근거가 없어서 확정을 못 했다. 상류를 직접 열어 닫았다 —
+   `https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/LICENSE.txt`
+   첫 줄이 "The MIT License", 다음이 "Copyright (c) 2018 Red Canary, Inc." 이고,
+   guid `8b87dd03-8204-478c-bac3-3959f6528de3` 와 이름 "Delay execution with ping"
+   이 상류 `atomics/T1497.003/T1497.003.yaml` 4-5 행에 그대로 있다. 표시는 루트
+   `NOTICE` 3 절 표와 정제본 머리 두 곳에 뒀다 — MIT 의 조건은 저작권 고지뿐인데
+   지금까지 그 줄이 우리 공개본에 없었다. **남는 단서**: AIShellJack 이 어느 ART
+   커밋에서 뽑았는지는 확보 파일에 없다. 대조 대상은 master 의 현재 판이다.
 
 ## 이 자료가 검증하는 것
 

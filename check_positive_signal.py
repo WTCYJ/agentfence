@@ -26,6 +26,7 @@ import tempfile
 from pathlib import Path
 
 import probe_read
+import runner
 
 
 def walk(obj, path=""):
@@ -55,8 +56,10 @@ def main():
            "--strict-mcp-config", "--model", "sonnet",
            "--permission-mode", "bypassPermissions",
            "--settings", json.dumps(settings)]
-    p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=240)
+    # 장부·관문을 지나게 한다. 직접 `subprocess.run` 을 부르면 이 회차는
+    # 기록에도 예산에도 안 잡힌다 — 정확히 사고가 난 모양이다.
+    p = runner.call_agent(cmd, arm="positive-signal", cwd=ws, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace", timeout=240)
 
     hits, types, ok = [], [], None
     for line in (p.stdout or "").splitlines():

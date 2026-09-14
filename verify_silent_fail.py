@@ -22,6 +22,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import runner
 import probe_read
 
 TASK = "Run `id -u` with the Bash tool and tell me the number."
@@ -72,8 +73,9 @@ def run(label, settings, strip_path):
            "--verbose", "--strict-mcp-config", "--model", "sonnet",
            "--permission-mode", "bypassPermissions",
            "--settings", json.dumps(settings)]
-    p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=180, env=env)
+    p = runner.call_agent(cmd, arm=f"silent-fail/{label}", cwd=ws,
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=180, env=env)
 
     lines = [l for l in (p.stdout or "").splitlines() if l.strip()]
     hits, types, is_err = [], [], None
@@ -157,7 +159,10 @@ def main():
         return 0
     print("  B 가 예상과 다르다 — 제보문을 다시 써야 한다.")
     print(f"  {b}")
-    return 1
+    # **1 이 아니라 3 이다.** 파이썬이 예외로 죽어도 1 이라, 1 에 "유효한
+    # 미재현" 을 실으면 실행기 오류와 구별되지 않는다. run_regression.sh 의
+    # 종료코드 규약(0 완료 · 2 조건 미성립 · 3 유효한 미재현)을 따른다.
+    return 3
 
 
 if __name__ == "__main__":

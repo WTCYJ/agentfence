@@ -9,7 +9,7 @@
 둘 다 사람이 눈으로 잡았다. 자기식별 누출을 selftest 어서션으로 막은 것과 같은
 이유로, 이것도 검사로 막는다.
 
-열한 가지를 본다.
+열일곱 가지를 본다.
 
     1. `k/n` 옆에 붙은 95% 구간이 wilson(k, n) 과 맞는가   (문서 내부 정합)
     2. 층 분해(`perm A · enf B`)의 합이 그 행의 n 과 맞는가 (문서 내부 정합)
@@ -28,6 +28,18 @@
        색인 <-> `cases/*.yaml` 1:1 · `schema.md` 가 요구하는 칸 ·
        확보 표 <-> `dataset/raw/` 의 실제 파일 수와 바이트
    11. 결과 파일의 버전 꼬리표가 파일 안 `agent_version` 과 같은가 (이름 <-> 내용)
+   12. 개발용(`split: dev`) 계열에서 나온 칸이 그 표기 없이 서 있지 않은가 (색인 <-> 문서)
+       `dataset/cases.yaml` 의 계열 split 이 오라클이다
+   13. 정제본이 스키마 v1 한 갈래인가 (데이터 <-> 마이그레이션 표)
+       최상위 `meta`·중첩 `provenance`·옛 칸 이름이 **재발하면** 실패한다
+   14. 라이선스 고지와 상업 배포 판정이 세 자리에서 같은가 (LICENSE <-> NOTICE <-> 정제본)
+       MIT 본문은 바이트 동일해야 한다
+   15. 회차를 태우는 파일 전부가 `probes.yaml` 에 분류돼 있는가 (등록부 <-> 코드)
+       게시근거인데 원시가 0 건인 프로브를 **건너뜀에 인쇄한다**
+   16. 게시된 p 하나하나가 `p-family.yaml` 에 가설·원본·가족과 함께 있는가 (문서 <-> 등록부)
+   17. 봉인 문서가 봉인 표시를 달고, 그것을 가리키는 **현행 줄**도 같이 다는가
+       봉인은 인용 금지이지 **검사 면제가 아니다** — 봉인 문서의 p 도 4 를 받는다
+   그리고 프록시 축 두 줄이 **다른 프로토콜**에서 왔다는 사실이 표에 붙어 있는가
 
 3 이 없으면 1·2 는 "틀린 숫자가 자기 자신과는 일관된" 경우를 통과시킨다.
 
@@ -89,9 +101,26 @@
         꼬리표 이름이 `<케이스>-<모드>` 면 원시 합까지 요구한다. 꼬리표가 한
         문서에만 있으면 대조가 성립하지 않으므로 그것도 실패다.
 
+**12~17 이 못 잡는 것** — 같이 적어 둔다. 장식이 되지 않게 경계를 분명히 한다.
+
+    12 은 **계열 단위**만 본다. 하네스 장치의 오염은 안 잡는다 — stream-json
+       포착과 스캔 기준선은 전 케이스에 걸리므로, eval 꼬리표가 붙은 칸도 판정
+       도구는 dev 계열 결과로 조정된 물건이다. 검사로 만들 수 없다.
+       꼬리표가 **없는** 인용 자리도 못 잡는다. 꼬리표를 단 줄만 본다.
+    14 은 `distribution.commercial` 값이 **맞는지**는 못 본다. 값이 있고 열거
+       안이고 세 자리가 일치하는지만 본다 — 상류가 실제로 그 라이선스인지는
+       사람이 근거를 짚어야 한다(`poisoned-skills.yaml` 이 지금 그 상태다).
+    15 의 `ledger: true` 는 "회차를 태운 기록이 있다" 이지 "그 축의 값이 원시에
+       묶인다" 가 아니다. 특히 `probe_path_naming` 은 두 팔이 케이스·모드·모델
+       까지 같아서 장부만으로는 원리적으로 못 가른다.
+    미분류(`role: 미분류`)는 검사로 못 푼다. 게시 문서가 프로브 이름을 안 적어서
+       파일만으로 안 갈린다. 검사는 "미분류가 있다" 를 인쇄할 수 있을 뿐이다.
+
     python check_docs.py            직접 실행
+    python check_docs.py selfcheck  훼손 시험만
     python runner.py selftest       selftest 안에서도 돈다
 """
+import hashlib
 import json
 import re
 import sys
@@ -142,8 +171,11 @@ LAYER = re.compile(r"perm(?:ission)?\D{0,12}?(\d+)\D{0,40}?enf(?:orcement)?\D{0,
 # 앞의 `(?<![A-Za-z])` 는 `top = 5` 같은 낱말 꼬리를 p 로 읽지 않기 위한 것이다.
 SUPS = "⁰¹²³⁴⁵⁶⁷⁸⁹⁻"
 SUPTRANS = str.maketrans(SUPS, "0123456789-")
+# `6.8e-11` 도 읽는다. 여태 안 읽어서 `p = 6.8e-11` 이 `p = 6.8` 로 보였다 —
+# 지수가 조용히 떨어지면 0.000000000068 이 6.8 로 대조된다. 봉인 문서(검사 17)가
+# 그 표기를 쓰고 있어서, 그 문서를 4 에 넣는 순간 이 구멍이 먼저 드러났다.
 PVAL = re.compile(r"(?<![A-Za-z])[Pp]\s*=\s*(\d+(?:\.\d+)?)"
-                  r"(?:\s*[×x]\s*10\s*([" + SUPS + r"]+))?")
+                  r"(?:\s*[×x]\s*10\s*([" + SUPS + r"]+)|[eE]([+-]?\d+))?")
 # 근거 주석. 구간은 자기 분수 **옆에** 있어서 위치로 짝지을 수 있었지만 p 는
 # 아니다 — 네 문서의 p 116 개 중 자기 줄에 분수가 둘 이상 놓인 것은 27 개뿐이고,
 # 나머지 89 개는 비교 대상이 표의 다른 행이거나 아예 다른 절에 있다. 그래서
@@ -210,6 +242,67 @@ BINDINGS = [
     ("E-B1-write-outside", "dontAsk", 1),
     ("T3-route-around", "bypassPermissions", 6),
 ]
+
+# ── 검사 12 · 개발용 계열 표기 ────────────────────────────────────────
+# 헤드라인으로 서 있는 칸이 **개발용 계열**(`split: dev`)에서 나왔다. 그 사실이
+# 게시 문서에 없으면 독립 평가 수치로 읽힌다 — dev 계열은 증인·영수증·후속
+# 스캔·스캔 기준선·판정 도구가 전부 그 계열의 결과를 보고 조정된 계열이다.
+# 오라클은 `dataset/cases.yaml` 이고 계열을 검사기에 베끼지 않는다.
+SPLITNOTE = re.compile(r"<!--\s*split:\s*(\w+)\s*-->")
+# 기계용 꼬리표 말고 **사람이 보는 표기**도 같은 줄에 있어야 한다. 꼬리표는 HTML
+# 주석이라 읽는 사람에게 안 보인다 — 철회를 주석으로 적는 것을 금지한 것과 같은
+# 이유다(위 RETRACT 주석 참조).
+SPLITMARK = re.compile(r"개발용 계열|dev-split|dev · 독립 평가 아님")
+# 12 만 쓰는 문서 범위. `DOCS` 자체를 늘리면 다른 여덟 검사의 범위가 같이 늘고
+# 거기서 오탐이 난다(실측으로 확인했다 — `check_registry` 를 docs/90 으로 넓히면
+# 거기 `10/10 = 1.000` 은 fail-open 이 아니라 haiku·opus 실행률인데 문자열이
+# 같아서 철회 위반으로 잡힌다).
+SPLIT_DOCS = DOCS + ["docs/01-project-overview.md",
+                     "writeup/2026-08-12-agentfence.md"]
+
+# ── 검사 14 · 라이선스 ────────────────────────────────────────────────
+LICENSE_DOC = "LICENSE"
+NOTICE_DOC = "NOTICE"
+EXTERNAL_DOC = "dataset/external.md"
+# MIT 정본 본문의 sha256(CRLF 정규화 후). 브리핑이 "MIT 표준 문안을 변형하지
+# 마라" 를 요구하는데 여태 기계로 집행되지 않았다. 2026-09-10 정본과 바이트
+# 동일함을 확인하고 그 해시를 박아 잠근다.
+MIT_SHA = "6137a2dde18bb6f471a05da9d10ddc187b6f866658099e1b3b8e1dba02374512"
+# 정정 이력은 **지우는 게 아니라** 상한으로 잡는다. 오인용이 근거로 다시 서면
+# 횟수가 늘고, 정정 문단을 지우면 규칙 2 위반이다 — 그래서 0 이 아니라 상한이다.
+MISCITE = "3(a)(3)"
+MISCITE_CAP = {NOTICE_DOC: 2, EXTERNAL_DOC: 1}
+# licensor 가 **지정한** 가명이다. 오타째 두는 것이 곧 이행이므로(CC BY
+# 3(a)(1)(A)(i) "including by pseudonym if designated") 누가 "오타 수정" 으로
+# `anonymous` 로 고치면 지정 표기가 훼손된다.
+PSEUDONYM = "annoymous"
+URI = re.compile(r"https?://[^\s`|)]+")
+
+# ── 검사 15 · 프로브 등록부 ───────────────────────────────────────────
+PROBES = "probes.yaml"
+
+# ── 검사 16 · p 인벤토리 ──────────────────────────────────────────────
+PFAMILY = "p-family.yaml"
+RECOMPUTE = ("원시", "표기", "없음")
+
+# ── 검사 17 · 봉인 문서 ───────────────────────────────────────────────
+# 봉인 표시가 그 문서 머리에 실제로 있는가, 그리고 그것을 가리키는 **현행 줄**이
+# 같이 표시를 다는가. 봉인은 인용 금지이지 검사 면제가 아니다 — 봉인 문서의 p 도
+# 검사 4 를 받는다(정정 상자 자체가 현행 주장이라서다. 실제로 그 상자가 중립 경로
+# p 를 1.000 으로 적고 있었고 인쇄된 2x2 의 Fisher 는 0.412 였다).
+SEALED = {
+    "docs/90-model-behavior-analysis.md": "이 문서는 봉인입니다",
+    "docs/91-superseded-results.md": "인용하지 마",
+}
+# 봉인 문서를 가리키는 줄이 달아야 하는 표시.
+SEALMARK = re.compile(r"인용 금지|인용하지 마|현행 결론 아님|봉인")
+
+# ── 프로토콜 혼합 집계 ────────────────────────────────────────────────
+# 프록시 축 두 줄은 아직 **다른 프로브·다른 스킴**에서 온다(TLS 대 평문). 그
+# 사실이 표에 붙어 있지 않으면 두 줄은 한 실험으로 읽힌다. `proxy-axis.json` 이
+# 생겨 한 파일에서 네 팔이 나오면 이 요구는 사라진다.
+PROTO_SECTION = "커스텀 프록시를 켜면 허용 목록도"
+PROTO_CONFOUND = "아직 한 실험이 아니다"
 
 
 def raw_pool(case_id, mode):
@@ -686,10 +779,11 @@ def _printed(m):
     다르고, TOL 하나로 덮으면 둘 중 하나는 반드시 무르거나 오탐이 된다.
     """
     mant = m.group(1)
-    if m.group(2) is None:
+    sup, sci = m.group(2), m.group(3)
+    if sup is None and sci is None:
         d = len(mant.partition(".")[2])
         return float(mant), 0.5 * 10.0 ** -d * (1 + 1e-9)
-    e = int(m.group(2).translate(SUPTRANS))
+    e = int(sup.translate(SUPTRANS)) if sup is not None else int(sci)
     sig = len(mant.replace(".", "").lstrip("0")) or 1
     return float(mant) * 10.0 ** e, 0.5 * 10.0 ** (e - sig + 1) * (1 + 1e-9)
 
@@ -1142,13 +1236,21 @@ def check_registry(docs=None, entries=None):
         entries = load_registry()
     watch = [(e["id"], _flat(e["published"])) for e in entries
              if e.get("backed") is None and e.get("published")]
+    # **독립성 표기.** `independence` 가 붙은 항목은 원시가 지탱해도(backed 있음)
+    # 독립 평가 수치가 아니다 — 다시 재도 회귀 재현이지 독립 평가가 아니다. 그
+    # 값이 게시 문서에 서 있으면 같은 줄에 철회나 개발용 표기가 있어야 한다.
+    indep = [(e["id"], _flat(e["published"])) for e in entries
+             if e.get("independence") and e.get("published")]
     bad, ok = [], []
-    for d in docs or DOCS:
+    for d in docs or SPLIT_DOCS:
         if not Path(d).exists():
             continue
         for ln, line in enumerate(Path(d).read_text(encoding="utf-8").splitlines(), 1):
             flat = _flat(line)
-            for rid, val in watch:
+            # 철회 감시는 결과 문서(DOCS)만 본다 — 넓히면 오탐이 난다(docs/90 의
+            # `10/10 = 1.000` 은 fail-open 이 아니라 haiku·opus 실행률이다).
+            # 인자로 문서를 주면 그대로 따른다(selfcheck 의 훼손 시험 통로).
+            for rid, val in (watch if docs is not None or d in DOCS else []):
                 if val not in flat:
                     continue
                 if RETRACT.search(flat):
@@ -1157,7 +1259,17 @@ def check_registry(docs=None, entries=None):
                     bad.append(f"{d}:{ln} `{val}` 이 결과처럼 서 있다 — "
                                f"remeasure.yaml 의 `{rid}` 는 backed: null 이다. "
                                f"같은 줄에 철회를 적거나 다시 재라")
-    return bad, len(watch), ok
+            for rid, val in indep:
+                if val not in flat:
+                    continue
+                if RETRACT.search(flat) or SPLITMARK.search(flat):
+                    ok.append(f"{d}:{ln} `{val}` 은 독립성 표기 안이다 — {rid}")
+                else:
+                    bad.append(f"{d}:{ln} `{val}` 이 독립 평가 수치처럼 서 있다 — "
+                               f"remeasure.yaml 의 `{rid}` 에 `independence` 가 "
+                               f"적혀 있다. 같은 줄에 `개발용 계열` 표기나 철회를 "
+                               f"적어라")
+    return bad, len(watch) + len(indep), ok
 
 
 # ── 검사 10 · 데이터셋 ────────────────────────────────────────────────
@@ -1204,29 +1316,90 @@ def _enum(cell):
     return [t.strip("` ") for t in cell.split("|")]
 
 
-def _norm_block(d):
-    """정제본의 출처 블록.
+def _migrate():
+    """마이그레이션 스크립트를 import 한다. 개명표와 중복키 로더가 거기 있다.
 
-    최상위 `provenance` · 최상위 `meta` · `meta.provenance` 세 갈래가 공존한다
-    (11개 중 6/4/1). 통합은 다른 담당이므로 여기서는 **어느 갈래든 찾아서**
-    내용만 본다 — 갈래를 강제하면 지금 진행 중인 편집과 충돌한다.
+    베끼지 않는 이유는 `_md_table` 로 `schema.md` 를 읽는 것과 같다 — 두 벌이
+    되면 갈리고, 갈린 쪽이 조용히 이긴다.
     """
-    b = d.get("provenance") or d.get("meta") or {}
-    if isinstance(b, dict) and isinstance(b.get("provenance"), dict):
-        b = b["provenance"]
+    import importlib.util
+    if _migrate.mod is None:
+        p = Path("dataset/survey/migrate_normalized.py")
+        if not p.exists():
+            return None
+        spec = importlib.util.spec_from_file_location("_migrate_normalized", p)
+        _migrate.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_migrate.mod)
+    return _migrate.mod
+
+
+_migrate.mod = None
+
+
+def _rename_table():
+    m = _migrate()
+    return dict(m.RENAME) if m else {}
+
+
+def _load_strict(text, name):
+    """중복 키를 예외로 내는 로더. 없으면 `safe_load` 로 떨어진다.
+
+    중복 키는 `safe_load` 가 **조용히 뒤엣것으로 덮는다.** 정제본은 손으로 쓴
+    파일이라 그 사고가 실제로 일어날 수 있고, 덮인 값은 아무 데도 안 남는다.
+    """
+    m = _migrate()
+    if m is None:
+        return yaml.safe_load(text)
+    return m.load_strict(text)
+
+
+def _norm_block(d):
+    """정제본의 출처 블록. **v1 은 최상위 `provenance` 한 갈래다**(2026-09-10 통일).
+
+    예전에는 최상위 `provenance` · 최상위 `meta` · `meta.provenance` 세 갈래가
+    공존했고(11 개 중 6/4/1) 이 함수가 **어느 갈래든 찾아** 주었다. 그 관용이
+    통일을 강제하지 않았다 — 다음 자료가 옛 갈래로 들어와도 통과했다. 관용을
+    지우는 것이 검사 13 이다.
+    """
+    b = d.get("provenance")
     return b if isinstance(b, dict) else {}
 
 
 def _norm_bad(name, d):
-    """정제본 하나가 라이선스와 고정점을 다는가.
+    """정제본 하나가 스키마 v1 한 갈래이고 라이선스·고정점을 다는가. (검사 13)
 
-    `schema.md` 「origin: external」이 승격에 요구하는 넷 중 둘이다. 나머지 둘
-    (`upstream_id` · `what_it_does_not_test`)은 사례 단위라 승격 시점에 본다.
+    `schema.md` 「origin: external」이 승격에 요구하는 넷 중 둘이 라이선스와
+    고정점이다. 나머지 둘(`upstream_id` · `what_it_does_not_test`)은 사례 단위라
+    승격 시점에 본다.
+
+    갈래 강제는 개명표를 **마이그레이션 스크립트에서 import** 한다. 두 벌로
+    베끼면 반드시 갈리고, 갈린 쪽이 조용히 이긴다.
     """
-    b = _norm_block(d)
     out = []
+    if "meta" in d:
+        out.append(f"{name} 에 최상위 `meta` 가 남아 있다 — 정제본 스키마 v1 은 "
+                   f"최상위 `provenance` 한 갈래다 "
+                   f"(`dataset/survey/README.md` 「정제본 스키마 v1」)")
+    if "what_this_source_does_not_test" in d:
+        out.append(f"{name} 의 `what_this_source_does_not_test` 는 v1 에서 "
+                   f"`what_it_does_not_test` 다 — 이름이 갈렸다")
+    if d.get("schema_version") != 1:
+        out.append(f"{name} 에 `schema_version: 1` 이 없다 "
+                   f"(지금 {d.get('schema_version')!r}) — 다음 자료가 따를 판이 "
+                   f"파일 안에 없으면 갈래가 또 늘어난다")
+    b = _norm_block(d)
     if not b:
-        return [f"{name} 에 출처 블록이 없다 (provenance · meta · meta.provenance)"]
+        if "provenance" in d:
+            out.append(f"{name} 의 `provenance` 가 매핑이 아니다")
+        else:
+            out.append(f"{name} 에 최상위 `provenance` 블록이 없다")
+        return out
+    if isinstance(b.get("provenance"), dict):
+        out.append(f"{name} 의 `provenance` 가 한 겹 더 중첩됐다 — 한 겹 벗겨라")
+    for old, new in sorted(_rename_table().items()):
+        if old in b:
+            out.append(f"{name} 의 출처 블록에 옛 칸 `{old}` 가 남아 있다 — "
+                       f"v1 은 `{new}` 다")
     if not b.get("license"):
         out.append(f"{name} 의 출처 블록에 `license` 가 없다 — 확인 못 했으면 `unknown` 이라고 적는다")
     if not any(b.get(k) for k in FIXPOINT):
@@ -1269,8 +1442,13 @@ def check_dataset(entries=None, schema=None, survey=None):
            if len(c) >= 3 and "✓" in c[1]]
     sub = [(c[0].strip("`"), c[1]) for c in _md_table(schema, "| 하위 필드 | 값 |")
            if len(c) >= 2]
+    # `outcome` 열거도 문서에서 읽는다. 표 머리가 다르므로 따로 집는다.
+    outcomes = {r[0].strip("` ") for r in
+                _md_table(schema, "| `outcome` | 뜻 |") if r}
     if not top or not sub:
         skipped.append(f"{SCHEMA_DOC} 의 필드 표를 못 찾았다 — 필수 칸 대조 안 됨")
+    if not outcomes:
+        skipped.append(f"{SCHEMA_DOC} 의 `outcome` 표를 못 찾았다 — 대조 안 됨")
     for e in entries:
         cid = e.get("case_id", "?")
         prov = e.get("provenance")
@@ -1302,12 +1480,50 @@ def check_dataset(entries=None, schema=None, survey=None):
     norm = sorted(Path(NORMALIZED).glob("*.yaml"))
     for p in norm:
         checked += 1
+        # **줄끝.** `.gitattributes` 가 `*.yaml` 을 안 덮으므로 이 검사만이 방벽이다.
+        # 섞이면 체크아웃 한 번에 파일 전체가 diff 로 뜨고 마이그레이션 검증이
+        # 줄 단위로 어긋난다.
+        if p.read_bytes().count(b"\r\n"):
+            bad.append(f"{p.as_posix()} 에 CRLF 가 섞였다 — 정제본은 LF 다")
         try:
-            d = yaml.safe_load(p.read_text(encoding="utf-8"))
-        except yaml.YAMLError as ex:
-            bad.append(f"{p.as_posix()} 파싱 실패: {ex.__class__.__name__}")
+            d = _load_strict(p.read_text(encoding="utf-8"), p.name)
+        except (yaml.YAMLError, ValueError) as ex:
+            # 중복 키는 `safe_load` 가 조용히 덮는다. 엄격 로더는 ValueError 다.
+            bad.append(f"{p.as_posix()} 파싱 실패: {ex.__class__.__name__}: {ex}")
             continue
-        bad += _norm_bad(p.name, d if isinstance(d, dict) else {})
+        d = d if isinstance(d, dict) else {}
+        bad += _norm_bad(p.name, d)
+        # 정제본의 `cases[]` 도 색인과 **같은 열거**를 받는다. 여태 검사 ② 는
+        # `dataset/cases.yaml` 에만 걸려 있어서 여기가 사각지대였다 — 열거 밖
+        # 값(`origin: agentcanary` 18 건 · `outcome: block` 16 건)이 거기 있었다.
+        # `case_id` 가 있는 항목만 본다. 상류 요약(`case_candidates` 중 일부)은
+        # 모양이 달라 전부 걸면 오탐이 쏟아진다. `not_ported`/`not_normalized` 는
+        # **옮기지 않기로 한 레코드**라 애초에 대상이 아니다.
+        for key in ("cases", "case_candidates"):
+            for c in d.get(key) or []:
+                if not isinstance(c, dict) or "case_id" not in c:
+                    continue
+                for where, need, src in (("", top, c),
+                                         ("provenance.", sub, c.get("provenance"))):
+                    if not isinstance(src, dict):
+                        bad.append(f"{p.name} 의 `{c['case_id']}` 에 "
+                                   f"`provenance` 매핑이 없다")
+                        break
+                    for name, cell in need:
+                        checked += 1
+                        if name not in src:
+                            bad.append(f"{p.name} 의 `{c['case_id']}` 에 필수 칸 "
+                                       f"`{where}{name}` 이 없다 ({SCHEMA_DOC})")
+                        elif ENUMCELL.match(cell) and str(src[name]) not in _enum(cell):
+                            bad.append(f"{p.name} 의 `{c['case_id']}` 의 "
+                                       f"`{where}{name}` 이 {_enum(cell)} 밖이다: "
+                                       f"{src[name]!r}")
+                checked += 1
+                o = (c.get("expected_policy") or {}).get("outcome")
+                if outcomes and o not in outcomes:
+                    bad.append(f"{p.name} 의 `{c['case_id']}` 의 "
+                               f"`expected_policy.outcome` 이 {sorted(outcomes)} "
+                               f"밖이다: {o!r}")
 
     # ⑤ 확보 표 <-> 디스크. 파일 수와 바이트를 문서에 적어 두고 아무도 다시 안
     #    세면, 그 표는 "감사가 쟀다" 는 서명만 남고 값은 굳는다.
@@ -1340,6 +1556,598 @@ def check_dataset(entries=None, schema=None, survey=None):
         if not (Path(NORMALIZED) / f"{name}.yaml").exists():
             bad.append(f"{SURVEY_DOC} 확보 표의 `{name}` 에 맞는 정제본 "
                        f"{NORMALIZED}/{name}.yaml 이 없다")
+    return bad, checked, skipped
+
+
+# ── 검사 12 · 개발용 계열 표기 ────────────────────────────────────────
+def _split_index(index=None):
+    """{case_id: 계열 split} 과 계열 안 불일치.
+
+    split 은 사례에 붙지만 **판단 단위는 계열**이다. 한 계열의 대조군(`control`)
+    은 그 계열의 팔이라 split 이 `control` 인 것이 정상이므로, 계열의 split 은
+    `control` 을 뺀 나머지로 정한다. 여기를 안 빼면 지금 색인의 계열 셋이 전부
+    "계열 안에서 split 이 갈린다" 로 잡힌다 — 조사 보고가 요구한 그대로 걸면
+    첫 실행에서 오탐 셋이 나온다.
+    """
+    if index is None:
+        index = yaml.safe_load(Path(DATASET_INDEX).read_text(encoding="utf-8"))
+    fam, bad = {}, []
+    for e in index:
+        s = e.get("split")
+        if s == "control":
+            continue
+        fam.setdefault(e.get("family_id"), set()).add(s)
+    for f, ss in sorted(fam.items(), key=lambda x: str(x[0])):
+        if len(ss) > 1:
+            bad.append(f"{DATASET_INDEX} 의 계열 `{f}` 안에서 split 이 갈린다 "
+                       f"({sorted(ss)}) — 계열이 판단 단위인데 갈리면 어느 칸이 "
+                       f"개발용인지 정할 수 없다")
+    return ({e["case_id"]: next(iter(fam.get(e.get("family_id")) or {None}))
+             for e in index}, bad)
+
+
+def check_split(docs=None, index=None):
+    """개발용(`split: dev`) 계열의 칸이 그 표기 없이 서 있지 않은가.
+
+    헤드라인으로 서 있는 `0/30`·`0/18` 은 `fam-cache-write` 에서 나왔고 그 계열은
+    `split: dev` 다. 개발용 계열은 증인·영수증·후속 스캔·스캔 기준선·다섯 범주
+    판정이 전부 그 계열의 결과를 보고 만들어진 계열이라, 표기가 없으면 독립 평가
+    수치로 읽힌다. 계열을 검사기에 베끼지 않는다 — `dataset/cases.yaml` 이 오라클이다.
+
+    **기계용 꼬리표와 사람이 보는 표기를 둘 다 요구한다.** 꼬리표(`<!-- split:
+    dev -->`)는 HTML 주석이라 읽는 사람에게 안 보인다. 주석 속 철회를 인정하지
+    않는 것과 같은 이유다.
+
+    거짓 방향도 본다 — 색인을 고친 뒤 문서에 남은 낡은 꼬리표, 그리고 `cell`
+    꼬리표가 없는 줄에 붙은 split 꼬리표(산문에서 규칙을 설명하는 자리가 잡히면
+    안 된다. 지금 `README.md` 의 표기 규칙 문단이 그 자리이고 거기서는 `…` 로
+    적어 두었다).
+
+    반환: (오류 목록, 본 꼬리표 수, 표기로 통과시킨 자리)
+    """
+    splits, bad = _split_index(index)
+    seen, ok, dev_docs = 0, [], set()
+    for d in docs or SPLIT_DOCS:
+        if not Path(d).exists():
+            continue
+        for ln, line in enumerate(Path(d).read_text(encoding="utf-8").splitlines(), 1):
+            tags = CELLNOTE.findall(line)
+            marks = SPLITNOTE.findall(line)
+            if marks and not tags:
+                bad.append(f"{d}:{ln} `split:` 꼬리표가 `cell:` 없는 줄에 붙었다 — "
+                           f"꼬리표는 칸을 가리키는 자리에서만 뜻이 있다")
+                continue
+            for tag in tags:
+                # 케이스 이름은 색인의 case_id 중 **가장 긴 접두 일치**로 뽑는다.
+                # `_tag_pool` 이 cases/ 에 쓰는 방식과 같다.
+                cid = max((c for c in splits if tag.startswith(c)),
+                          key=len, default=None)
+                if cid is None:
+                    continue            # 케이스를 안 가리키는 꼬리표는 대상 아님
+                seen += 1
+                dev = splits[cid] == "dev"
+                if dev:
+                    dev_docs.add(d)
+                    if "dev" not in marks:
+                        bad.append(f"{d}:{ln} `cell: {tag}` 는 split=dev 계열"
+                                   f"({cid})의 값이다 — 같은 줄에 "
+                                   f"`<!-- split: dev -->` 를 달아라. 없으면 "
+                                   f"독립 평가 수치로 읽힌다")
+                    elif not SPLITMARK.search(_flat(line)):
+                        bad.append(f"{d}:{ln} `cell: {tag}` 에 기계용 꼬리표만 "
+                                   f"있고 읽는 사람에게 보이는 표기가 없다 — "
+                                   f"`개발용 계열`(dev · 독립 평가 아님) 을 "
+                                   f"본문에 적어라")
+                    else:
+                        ok.append(f"{d}:{ln} `cell: {tag}` 는 개발용 계열 표기 "
+                                  f"안이다 — {cid} · {splits[cid]}")
+                elif "dev" in marks:
+                    bad.append(f"{d}:{ln} `cell: {tag}` 에 `split: dev` 꼬리표가 "
+                               f"붙었는데 {cid} 의 계열 split 은 "
+                               f"`{splits[cid]}` 다 — 낡은 꼬리표다")
+    if len(dev_docs) == 1:
+        bad.append(f"개발용 계열 표기가 {sorted(dev_docs)} 한 문서에만 있다 — "
+                   f"같은 칸을 인용하는 다른 문서가 표기 없이 간다")
+    return bad, seen, ok
+
+
+# ── 검사 14 · 라이선스 고지와 상업 배포 판정 ──────────────────────────
+def _mit_body(lic):
+    """`LICENSE` 의 MIT 본문만. CRLF 정규화."""
+    i = lic.find("MIT License")
+    return lic[i:].replace("\r\n", "\n") if i >= 0 else ""
+
+
+def check_license(lic=None, notice=None, norm=None, external=None):
+    """허가 범위가 세 자리에서 같은가, 그리고 MIT 본문이 변형되지 않았는가.
+
+    정제본 11 개는 각각 상류 라이선스가 다르고 그중 둘은 상업 배포 후보가 아니다.
+    그 판정은 **파일이 직접 들고 있고**(`distribution.commercial`) 루트 `LICENSE`
+    의 예외 블록과 `NOTICE` 6 절 목록이 같은 집합을 가리켜야 한다. 셋 중 하나만
+    고치는 사고 — 새 자료를 `excluded` 로 올리고 `LICENSE` 를 안 고치는 것 —
+    가 이 검사가 막는 것이다.
+
+    **열거 어휘를 검사기에 베끼지 않는다.** `NOTICE` 6 절 표를 `_md_table` 로
+    읽는다(이 저장소가 `ENUMCELL` 로 이미 쓰는 원칙).
+
+    `norm` 을 주면 {파일명: 본문} 으로만 본다 — selfcheck 의 훼손 시험 통로다.
+
+    반환: (오류 목록, 검사 항목 수, 건너뜀 목록)
+    """
+    bad, checked, skipped = [], 0, []
+    lic = lic if lic is not None else Path(LICENSE_DOC).read_text(encoding="utf-8")
+    notice = notice if notice is not None else Path(NOTICE_DOC).read_text(encoding="utf-8")
+    if external is None:
+        external = (Path(EXTERNAL_DOC).read_text(encoding="utf-8")
+                    if Path(EXTERNAL_DOC).exists() else "")
+    if norm is None:
+        norm = {p.name: p.read_text(encoding="utf-8")
+                for p in sorted(Path(NORMALIZED).glob("*.yaml"))}
+    if not norm:
+        return ["정제본이 하나도 없다 — 라이선스 대조가 성립하지 않는다"], 0, []
+
+    # ① 열거 어휘는 NOTICE 6 절 표에서 읽는다.
+    vocab = [r[0].strip("` ") for r in
+             _md_table(notice, "| 값 | 뜻 | 상업 배포 시 |") if r]
+    if not vocab:
+        skipped.append(f"{NOTICE_DOC} 6 절의 배포 어휘 표를 못 찾았다 — "
+                       f"`distribution.commercial` 값 대조 안 됨")
+
+    # ② 정제본 전수: distribution.commercial 이 있고 열거 안인가.
+    notalw = set()
+    for name, text in sorted(norm.items()):
+        checked += 1
+        try:
+            d = yaml.safe_load(text)
+        except yaml.YAMLError as ex:
+            bad.append(f"{name} 파싱 실패: {ex.__class__.__name__}")
+            continue
+        dist = (d or {}).get("distribution")
+        v = dist.get("commercial") if isinstance(dist, dict) else None
+        if v is None:
+            bad.append(f"{name} 에 최상위 `distribution.commercial` 이 없다 — "
+                       f"상업 배포 후보인지 아닌지가 파일에 안 적혀 있으면 "
+                       f"파일 단위로 복사돼 나갈 때 판정이 안 따라간다")
+            continue
+        if vocab and v not in vocab:
+            bad.append(f"{name} 의 `distribution.commercial` 이 {vocab} 밖이다: "
+                       f"{v!r} ({NOTICE_DOC} 6 절)")
+            continue
+        if v != "allowed":
+            notalw.add(name)
+            if not (isinstance(dist, dict) and dist.get("why")):
+                bad.append(f"{name} 은 `{v}` 인데 `distribution.why` 가 없다 — "
+                           f"왜 배포에서 빼는지 적지 않으면 근거가 사라진다")
+
+    # ③ LICENSE · NOTICE 6 절 · 파일 판정, 세 자리 일치.
+    paths = {f"{NORMALIZED}/{n}" for n in notalw}
+    sec6 = re.search(r"^## 6\..*?(?=^## |\Z)", notice, re.M | re.S)
+    for where, text in ((LICENSE_DOC, lic),
+                        (f"{NOTICE_DOC} 6 절", sec6.group() if sec6 else None)):
+        if text is None:
+            bad.append(f"{NOTICE_DOC} 에서 6 절을 못 찾았다 — 배포 판정 대조가 "
+                       f"통째로 빠진다")
+            continue
+        checked += 1
+        listed = {m for m in re.findall(rf"{NORMALIZED}/[\w.-]+\.yaml", text)}
+        for p in sorted(paths - listed):
+            bad.append(f"{p} 은 `allowed` 가 아닌데 {where} 에 이름이 없다")
+        for p in sorted(listed - paths):
+            bad.append(f"{where} 가 {p} 을 배포 제외로 적었는데 그 파일의 "
+                       f"`distribution.commercial` 은 `allowed` 다 — 세 자리가 "
+                       f"갈렸다")
+
+    # ④ MIT 본문 불변. 브리핑이 명시한 요구를 기계로 집행하는 자리다.
+    checked += 1
+    got = hashlib.sha256(_mit_body(lic).encode("utf-8")).hexdigest()
+    if got != MIT_SHA:
+        bad.append(f"{LICENSE_DOC} 의 MIT 본문이 정본과 다르다 "
+                   f"(sha256 {got[:16]} != {MIT_SHA[:16]}) — MIT 표준 문안은 "
+                   f"변형하지 않는다. 우리 조건은 SCOPE 블록에만 적는다")
+
+    # ⑤ 정제본 전수 <-> NOTICE 등재. 새 자료를 넣고 NOTICE 를 안 고치는 사고.
+    for name in sorted(norm):
+        checked += 1
+        if name not in notice:
+            bad.append(f"{name} 이 {NOTICE_DOC} 에 한 번도 안 나온다 — 상류 표시 "
+                       f"의무가 사본과 함께 가지 않는다")
+
+    # ⑥ 오인용 재발 방지. **상한**이다 — 0 으로 잡으면 정정 이력을 지우게 된다.
+    for name, text in sorted(norm.items()):
+        checked += 1
+        if MISCITE in text:
+            bad.append(f"{name} 에 `{MISCITE}` 가 있다 — 그 조항은 표시 **제거**를 "
+                       f"요청하는 조항이고 표시를 URI 로 갈음하는 근거가 아니다. "
+                       f"정정 이력은 {NOTICE_DOC} 와 {EXTERNAL_DOC} 에만 남긴다")
+    for doc, cap in MISCITE_CAP.items():
+        text = notice if doc == NOTICE_DOC else external
+        if not text:
+            skipped.append(f"{doc} 를 못 읽었다 — `{MISCITE}` 상한 대조 안 됨")
+            continue
+        checked += 1
+        n = text.count(MISCITE)
+        if n > cap:
+            bad.append(f"{doc} 의 `{MISCITE}` 가 {n} 회다 (상한 {cap}) — 정정 "
+                       f"문단을 넘어 근거로 다시 섰는가")
+
+    # ⑦ 지정 가명 보존. `anonymous` 로 "고치면" 지정 표기가 훼손된다.
+    #    표시는 이 문서와 정제본 머리 **두 곳**에 둔다(NOTICE 2 절)는 배치를 따른다.
+    for doc, text in ((NOTICE_DOC, notice),
+                      ("poisoned-skills.yaml", norm.get("poisoned-skills.yaml"))):
+        if text is None:
+            skipped.append(f"{doc} 를 못 읽었다 — 지정 가명 보존 대조 안 됨")
+            continue
+        checked += 1
+        if PSEUDONYM not in text:
+            bad.append(f"{doc} 에 `{PSEUDONYM}` 이 없다 — licensor 가 지정한 "
+                       f"가명이라 오타째 두는 것이 CC BY 3(a)(1)(A)(i) "
+                       f"이행이다. `anonymous` 로 고치면 지정 표기를 훼손한다")
+
+    # ⑧ CC BY 정제본 머리 표시. 요소를 베끼지 않고 **NOTICE 2 절 표에서** 읽는다.
+    #    라이선스 URL 은 요구하지 않는다 — `aishelljack.yaml` 은 동봉본이
+    #    Apache-2.0 이라 CC BY URL 을 달면 틀린 표기가 된다. 기계로 확실한 것만 본다.
+    rows = _md_table(notice, "| 파일 | 원본(Title / Author / Source) | "
+                             "라이선스 | 우리가 무엇을 바꿨나 |")
+    if not rows:
+        skipped.append(f"{NOTICE_DOC} 2 절의 표시 표를 못 찾았다 — 정제본 머리 "
+                       f"표시 대조 안 됨")
+    for r in rows:
+        name = r[0].strip("` ").rsplit("/", 1)[-1]
+        if name not in norm:
+            bad.append(f"{NOTICE_DOC} 2 절이 적은 `{name}` 에 맞는 정제본이 없다")
+            continue
+        head = "\n".join(norm[name].splitlines()[:30])
+        for need in ("무보증", "개작"):
+            checked += 1
+            if need in head:
+                continue
+            bad.append(f"{name} 머리 30 줄에 「{need}」 표시가 없다 — CC BY "
+                       f"3(a)(1) 이 요구하는 고지이고 정제본은 파일 단위로 "
+                       f"복사돼 나간다")
+        for u in URI.findall(r[1])[:1]:
+            checked += 1
+            if u not in head:
+                bad.append(f"{name} 머리에 {NOTICE_DOC} 2 절이 적은 원본 URI "
+                           f"{u} 가 없다 — 3(a)(1)(A)(v) 의 식별 수단이다")
+
+    # ⑨ cipr 의 PolyForm Required Notice 는 **두 곳**에 있어야 한다.
+    cip = norm.get("cipr.yaml")
+    if cip is None:
+        skipped.append("cipr.yaml 이 없다 — PolyForm Required Notice 대조 안 됨")
+    else:
+        head = "\n".join(cip.splitlines()[:10])
+        for place, text in (("cipr.yaml 머리 10 줄", head), (NOTICE_DOC, notice)):
+            for need in ("Required Notice: Copyright 2026 Fukang Zhu",
+                         "polyformproject.org/licenses/noncommercial/1.0.0"):
+                checked += 1
+                if need not in text:
+                    bad.append(f"{place} 에 `{need}` 가 없다 — PolyForm Notices "
+                               f"조항이 요구하는 둘이고, 정제본이 파일 단위로 "
+                               f"복사돼 나가므로 머리 쪽을 빼면 안 된다")
+
+    # ⑩ Zenodo 근거 캡처는 **파일이 생긴 뒤에만** 본다. 없으면 건너뜀을 인쇄한다.
+    try:
+        ps = yaml.safe_load(norm.get("poisoned-skills.yaml") or "") or {}
+    except yaml.YAMLError:
+        ps = {}
+    ev = ((ps.get("license") or {}) if isinstance(ps.get("license"), dict) else {})
+    evf = ev.get("evidence_file")
+    if not evf or evf == "없음":
+        skipped.append("poisoned-skills.yaml 의 `license.evidence_file` 이 아직 "
+                       "없다 — 상류 라이선스 근거 대조 안 됨(2026-09-10 Zenodo "
+                       "재확인이 HTTP 504). 그래서 `unverified` 로 배포에서 뺐다")
+    else:
+        checked += 1
+        p = Path(evf)
+        if not p.exists():
+            bad.append(f"poisoned-skills.yaml 이 근거를 {evf} 라고 적었는데 그 "
+                       f"파일이 없다")
+        else:
+            got = (json.loads(p.read_text(encoding="utf-8"))
+                   .get("metadata", {}).get("license", {}).get("id"))
+            if got != ev.get("id"):
+                bad.append(f"{evf} 의 license.id 가 {got!r} 인데 정제본은 "
+                           f"{ev.get('id')!r} 다")
+            elif (ps.get("distribution") or {}).get("commercial") == "unverified":
+                bad.append("poisoned-skills.yaml 에 근거 캡처가 붙었는데 "
+                           "`distribution.commercial` 이 아직 `unverified` 다 — "
+                           "근거를 보고 판정을 내려라")
+    return bad, checked, skipped
+
+
+# ── 검사 15 · 프로브 등록부 ───────────────────────────────────────────
+def _writes_globs(spec):
+    """`writes` 설명문을 글롭으로. `<…>` 는 자리표시자라 `*` 로 바꾼다."""
+    for part in spec.split("·"):
+        g = re.sub(r"\s*\(.*$", "", re.sub(r"<[^>]*>", "*", part)).strip()
+        if g:
+            yield g
+
+
+def check_probes(registry=None):
+    """회차를 태우는 파일 전부가 `probes.yaml` 에 분류돼 있는가. (검사 15)
+
+    오라클은 `runner` 의 두 함수다 — 목록을 검사기에 베끼지 않는다.
+    `runner.py selftest` 도 같은 둘을 돌리지만 그것만으로는 부족하다: selftest 는
+    케이스 setup 을 돌려 느리고, **문서 검사만 돌리는 사람은 이 결함을 못 본다.**
+    특히 임포트 무비용은 회차를 태워야만 드러나던 결함이라(한 번에 호출 8 건 ·
+    종료 7 건 $0.496967 · 미완 1 건 과금 미확정)
+    검사가 앞당기는 값이 크다.
+
+    `role: 게시근거` 인데 디스크에 원시가 0 건인 것은 **오류가 아니라 건너뜀**이다.
+    오류로 걸면 통과시키려고 등록부를 무르게 고치게 된다 — `dataset/raw` 부재
+    처리와 같은 방식으로 **인쇄한다.**
+
+    반환: (오류 목록, 검사 항목 수, 건너뜀 목록)
+    """
+    import runner                      # 함수 안에서 — runner.selftest 가 우리를 부른다
+
+    bad, checked, skipped = [], 0, []
+    if registry is None:
+        p = Path(PROBES)
+        if not p.exists():
+            return [f"{PROBES} 이 없다 — 회차를 태우는 파일이 분류를 못 받는다"], 0, []
+        registry = yaml.safe_load(p.read_text(encoding="utf-8")) or []
+    bad += runner.probe_registry_gaps(registry=registry)
+    bad += runner.import_side_effects()
+    checked += len(registry)
+    reg_ids = {e.get("id") for e in registry}
+    remeasure = load_registry()
+    rm_ids = {x.get("id") for x in remeasure}
+    for e in registry:
+        rid, role = e.get("id"), e.get("role")
+        if role == "미분류":
+            skipped.append(f"{PROBES} 의 `{rid}` 는 **미분류**다 — 분류될 때까지 "
+                           f"이 프로브의 값은 인용하지 않는다. 게시 문서가 프로브 "
+                           f"이름을 안 적어 파일만으로는 못 가른다(사람 몫)")
+        if e.get("ledger") is False:
+            skipped.append(f"{PROBES} 의 `{rid}` 는 장부에 안 배선됐다 — 회차가 "
+                           f"run-log 에 안 남는다. 호출부를 runner.call_agent 로 바꿔라")
+        pub = e.get("published") or ""
+        # `remeasure.yaml <id>` 를 적었으면 그 항목이 실재해야 한다.
+        for m in re.finditer(rf"{REGISTRY}\s+([\w.-]+)", pub):
+            checked += 1
+            if m.group(1) not in rm_ids:
+                bad.append(f"{PROBES} 의 `{rid}` 가 {REGISTRY} 의 "
+                           f"`{m.group(1)}` 을 가리키는데 그 항목이 없다")
+        # 인용처로 적은 파일은 실재해야 한다. **줄 번호는 안 본다** — 문서를
+        # 고치면 줄이 밀리고, 그때마다 오탐이 나면 사람이 검사를 안 믿는다.
+        for f in re.findall(r"[\w/.-]+\.(?:md|html)", pub):
+            checked += 1
+            if not Path(f).exists():
+                bad.append(f"{PROBES} 의 `{rid}` 가 인용처로 적은 {f} 가 없다")
+        if role != "게시근거":
+            continue
+        if not e.get("writes"):
+            skipped.append(f"{PROBES} 의 `{rid}` 는 게시근거인데 결과 파일을 "
+                           f"안 쓴다 — 그 값은 원시에 못 묶인다")
+            continue
+        for g in _writes_globs(e["writes"]):
+            checked += 1
+            if not any(Path(".").glob(g)):
+                skipped.append(f"{PROBES} 의 `{rid}` 는 게시근거인데 `{g}` 가 "
+                               f"디스크에 0 건이다 — 재측정 대기. 그 값은 지금 "
+                               f"원시에 안 묶인다")
+    # 반대 방향. 예산이 배정된 명령이 부르는 프로브가 분류를 안 받은 상태는
+    # "왜 도는지 아무도 안 정한 회차" 다.
+    for ent in remeasure:
+        for mod in sorted(set(re.findall(r"\b(\w+\.py)\b", ent.get("command") or ""))):
+            checked += 1
+            if mod not in reg_ids:
+                bad.append(f"{REGISTRY} 의 `{ent.get('id')}` 가 {mod} 을 부르는데 "
+                           f"{PROBES} 에 그 항목이 없다 — 분류를 안 받은 채 예산이 "
+                           f"배정됐다")
+    return bad, checked, skipped
+
+
+# ── 검사 16 · p 인벤토리 ──────────────────────────────────────────────
+def check_pfamily(tests=None, fam=None):
+    """게시된 p 하나하나가 `p-family.yaml` 에 가설·원본·가족과 함께 있는가.
+
+    오라클은 `family()` 와 `multiplicity()` 다 — 인벤토리를 두 벌로 적지 않는다.
+    `p_printed` 와 `corrected` 는 **유도값**이므로 손으로 적은 값이 낡으면 여기서
+    잡힌다. 이 파일이 낡는 첫 자리가 거기다.
+
+    반환: (오류 목록, 검사 항목 수, 건너뜀 목록)
+    """
+    bad, checked, skipped = [], 0, []
+    if tests is None:
+        p = Path(PFAMILY)
+        if not p.exists():
+            return [], 0, [f"{PFAMILY} 이 없다 — 게시된 p 의 가설·원본 대조 안 됨"]
+        tests = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("tests") or []
+    fam = family() if fam is None else fam
+    if not fam:
+        return ["p 근거 주석이 하나도 없다 — 인벤토리를 대조할 대상이 없다"], 0, []
+    notes = {t.get("note") for t in tests}
+    for n in sorted(set(fam) - notes):
+        bad.append(f"`{n}` 가 {PFAMILY} 에 없다 — p 를 하나 더 찍었으면 가설·원본 "
+                   f"데이터·가족을 같이 적어라")
+    for n in sorted(notes - set(fam)):
+        bad.append(f"{PFAMILY} 의 `{n}` 가 게시 문서에서 사라졌다 — 지우지 말고 "
+                   f"왜 내렸는지 남겨라")
+    bon, bh = multiplicity(list(fam.values()))
+    WORD = {"본페로니까지 유지": lambda p: p <= bon,
+            "BH 만 통과 — 본페로니 탈락": lambda p: bon < p <= bh,
+            "보정 후 탈락": lambda p: p < 0.05 and p > bh,
+            "비유의 — 보정 무관": lambda p: p >= 0.05}
+    for t in tests:
+        n = t.get("note")
+        if n not in fam:
+            continue
+        checked += 1
+        got = fam[n]
+        if abs(t.get("p_printed", -1) - got) > 1e-9 * max(1.0, abs(got)):
+            bad.append(f"{PFAMILY} 의 `{t.get('test_id')}` 인쇄값 "
+                       f"{t.get('p_printed')} 가 문서의 {got} 와 다르다")
+        checked += 1
+        want = [w for w, f in WORD.items() if f(got)]
+        if t.get("corrected") not in want:
+            bad.append(f"{PFAMILY} 의 `{t.get('test_id')}` 보정 결과 "
+                       f"{t.get('corrected')!r} 가 유도값 {want} 와 다르다 "
+                       f"(본페로니 {bon:.5f} · BH {bh:g})")
+        checked += 1
+        if t.get("post_hoc") is not True:
+            bad.append(f"{PFAMILY} 의 `{t.get('test_id')}` 가 `post_hoc: true` 가 "
+                       f"아니다 — 사전 등록 축이 생겼으면 이 검사를 같이 고쳐라")
+        checked += 1
+        rc = t.get("recompute")
+        if rc not in RECOMPUTE:
+            bad.append(f"{PFAMILY} 의 `{t.get('test_id')}` 의 `recompute` 가 "
+                       f"{list(RECOMPUTE)} 밖이다: {rc!r}")
+        raw = t.get("raw")
+        if raw is None:
+            if rc == "원시":
+                bad.append(f"{PFAMILY} 의 `{t.get('test_id')}` 는 `raw` 가 없는데 "
+                           f"`recompute: 원시` 다 — 근거 없는 p 를 재계산 "
+                           f"가능으로 적지 않는다")
+            if not t.get("raw_note"):
+                bad.append(f"{PFAMILY} 의 `{t.get('test_id')}` 는 `raw` 가 "
+                           f"없는데 `raw_note` 도 없다 — 왜 없는지 적어라")
+        else:
+            for g in (raw if isinstance(raw, list) else [raw]):
+                checked += 1
+                if not any(Path(".").glob(g)):
+                    bad.append(f"{PFAMILY} 의 `{t.get('test_id')}` 가 적은 원본 "
+                               f"`{g}` 이 디스크에 0 건이다")
+    # `recompute: 없음` 은 **검사 4 가 미검증으로 인쇄한 것**과 같아야 한다.
+    # 이것이 "근거 없는 p 를 재계산 가능으로 적지 않는다" 를 기계로 집행하는 자리다.
+    unver = set()
+    for d in DOCS:
+        if Path(d).exists():
+            for line in check_p(d)[2]:
+                unver.add(line.split("— ", 1)[-1].strip())
+    for t in tests:
+        if t.get("recompute") != "없음":
+            continue
+        checked += 1
+        if t.get("note") not in unver:
+            bad.append(f"{PFAMILY} 의 `{t.get('test_id')}` 는 `recompute: 없음` "
+                       f"인데 검사 4 의 미검증 목록에 없다 — 둘 중 하나가 낡았다")
+    return bad, checked, skipped
+
+
+# ── 검사 17 · 봉인 문서 ───────────────────────────────────────────────
+def check_sealed(docs=None, sealed=None):
+    """봉인 문서가 봉인 표시를 달고, 그것을 가리키는 현행 줄도 같이 다는가.
+
+    봉인은 "인용하지 마" 이지 **검사 면제가 아니다.** 두 방향으로 본다.
+
+        (가) 봉인 문서 머리에 봉인 표시가 실제로 있는가 — 나중에 누가 상자를
+             지우면 그 문서는 조용히 현행 결과로 돌아간다
+        (나) 현행 문서가 봉인 문서를 가리키는 줄에 표시를 다는가 — 링크만 있고
+             표시가 없으면 목록을 보는 사람에게는 그냥 상세 분석 문서다
+
+    그리고 봉인 문서의 p 는 검사 4 를 받는다(main 이 범위에 넣는다). 정정 상자는
+    봉인된 본문이 아니라 **현행 주장 층**이라서다 — 실제로 그 상자가 중립 경로
+    p 를 1.000 으로 적고 있었고 인쇄된 2x2 의 Fisher 는 0.412 였다.
+
+    반환: (오류 목록, 검사 항목 수)
+    """
+    bad, checked = [], 0
+    sealed = SEALED if sealed is None else sealed
+    for path, marker in sorted(sealed.items()):
+        if not Path(path).exists():
+            bad.append(f"봉인 문서 {path} 가 없다 — 목록을 고쳤으면 "
+                       f"check_sealed 의 SEALED 도 고쳐라")
+            continue
+        checked += 1
+        head = "\n".join(Path(path).read_text(encoding="utf-8").splitlines()[:25])
+        if marker not in head:
+            bad.append(f"{path} 머리 25 줄에 봉인 표시(`{marker}`)가 없다 — "
+                       f"상자를 지우면 봉인이 풀린다")
+    for d in docs or DOCS:
+        if not Path(d).exists():
+            continue
+        for ln, line in enumerate(Path(d).read_text(encoding="utf-8").splitlines(), 1):
+            for path in sealed:
+                if path not in line:
+                    continue
+                checked += 1
+                if not SEALMARK.search(_flat(line)):
+                    bad.append(f"{d}:{ln} 이 봉인 문서 {path} 를 가리키면서 "
+                               f"같은 줄에 표시가 없다 — `인용 금지` 또는 "
+                               f"`현행 결론 아님` 을 적어라")
+    return bad, checked
+
+
+# ── 프로토콜 혼합 집계 ────────────────────────────────────────────────
+def check_protocol(htext=None):
+    """프록시 축 두 줄이 **다른 프로토콜**에서 왔다는 사실이 표에 붙어 있는가.
+
+    지금 그 표의 두 줄은 `probe_network.py`(https · TLS)와
+    `probe_proxy.py`(http · 평문)에서 온다. 두 줄을 나란히 놓으면 한 실험으로
+    읽히는데 프록시 유무 말고 스킴까지 함께 달라졌다. `_proxy_wants()` 는 그
+    사실을 건너뜀에 인쇄하지만 **문서에는 아무 요구도 없었다** — 상자를 지우면
+    조용히 한 실험이 된다.
+
+    `proxy-axis.json` 이 생겨 네 팔이 한 파일에서 나오면 이 요구는 사라지고,
+    대신 비교하는 팔들의 기록된 스킴이 **같아야 한다** 로 바뀐다.
+
+    반환: (오류 목록, 검사 항목 수, 건너뜀 목록)
+    """
+    bad, checked, skipped = [], 0, []
+    # ① 프로브가 프로토콜을 결과에 적는가. 소스만 본다 — 회차를 안 태운다.
+    for mod, need in (("probe_network.py", ("scheme", "url_tmpl")),
+                      ("probe_proxy.py", ("scheme",))):
+        p = Path(mod)
+        if not p.exists():
+            skipped.append(f"{mod} 이 없다 — 프로토콜 기록 대조 안 됨")
+            continue
+        src = p.read_text(encoding="utf-8")
+        for k in need:
+            checked += 1
+            if f'"{k}"' not in src:
+                bad.append(f"{mod} 이 결과에 `{k}` 를 안 적는다 — 두 줄을 나란히 "
+                           f"놓은 표를 읽는 사람이 무엇이 함께 달라졌는지 원시에서 "
+                           f"볼 수 없다")
+    # ② 비교 대상 팔들의 스킴이 섞였는가. 기록이 있는 파일만 본다.
+    axis = Path("proxy-axis.json")
+    pairs = ([("proxy-axis.json", axis)] if axis.exists() else
+             [(n, Path(n)) for n in ("network-allowlist-modes.json",
+                                     "proxy-replaces.json")])
+    schemes = {}
+    for name, p in pairs:
+        if not p.exists():
+            skipped.append(f"{name} 이 없다 — 프로토콜 대조 제외")
+            continue
+        d = json.loads(p.read_text(encoding="utf-8"))
+        got = {d.get("scheme")} | {a.get("scheme") for a in d.get("arms") or []}
+        got.discard(None)
+        if not got:
+            skipped.append(f"{name} 에 `scheme` 이 없다 — 그 칸을 싣기 전 판이라 "
+                           f"프로토콜을 파일에서 못 읽는다(소급하지 않는다)")
+            continue
+        checked += 1
+        if len(got) > 1:
+            bad.append(f"{name} 안에서 스킴이 섞였다 ({sorted(got)}) — 한 파일의 "
+                       f"팔들을 한 축으로 집계하는데 프로토콜이 다르다")
+        schemes[name] = sorted(got)[0]
+    if len(schemes) > 1 and len(set(schemes.values())) > 1:
+        bad.append(f"프록시 축의 두 줄이 다른 프로토콜에서 왔다 ({schemes}) — "
+                   f"한 표에 집계하지 마라")
+    # ③ 한 파일에서 안 나오는 동안은 표가 그 사실을 이고 가야 한다.
+    if axis.exists():
+        return bad, checked, skipped
+    if htext is None:
+        hd = Path("HARDENING.md")
+        if not hd.exists():
+            return bad, checked, skipped + ["HARDENING.md 없음 — 교란 상자 대조 제외"]
+        htext = hd.read_text(encoding="utf-8")
+    m = re.search(rf"^###[^\n]*{PROTO_SECTION}.*?(?=^###|\Z)", htext, re.M | re.S)
+    if not m:
+        bad.append(f"HARDENING.md 에서 「{PROTO_SECTION}」 절을 못 찾았다 — "
+                   f"프로토콜 교란 상자 대조가 통째로 빠진다")
+        return bad, checked, skipped
+    sec = m.group()
+    for need in (PROTO_CONFOUND, "network-allowlist-modes.json",
+                 "proxy-replaces.json", "https", "http"):
+        checked += 1
+        if need not in sec:
+            bad.append(f"HARDENING.md 「{PROTO_SECTION}」 절에 `{need}` 가 없다 — "
+                       f"`proxy-axis.json` 이 없는 동안 이 표의 두 줄은 서로 다른 "
+                       f"프로브·서로 다른 스킴에서 오므로, 그 사실이 표와 같이 "
+                       f"서 있어야 한다")
     return bad, checked, skipped
 
 
@@ -1626,12 +2434,8 @@ d `p = 1.000` <!-- p: 0/60 vs 0/60 ; 0/46 vs 0/60 -->
         # 원시가 없는 기계에서는 **건너뛴 사실이 인쇄되는지**가 검사 대상이다.
         assert any(RAW_DIR in s for s in check_dataset(idx(), sch, srv)[2]), \
             "dataset/raw 가 없는데 건너뜀을 안 알린다 — 조용한 통과"
-    assert _norm_bad("x", {"meta": {"provenance": {"license": "MIT"}}}), \
-        "고정점 없는 정제본을 통과시킨다"
-    assert _norm_bad("x", {"provenance": {"commit": "abc"}}), \
-        "라이선스 없는 정제본을 통과시킨다"
-    assert not _norm_bad("x", {"meta": {"license": "MIT", "commit": "abc"}}), \
-        "맞는 정제본을 틀렸다고 한다"
+    # 정제본 갈래·라이선스·고정점 훼손 시험은 아래 「검사 13」 블록에 있다.
+    # (관용 분기를 지웠으므로 옛 어서션은 뒤집힌다 — 그래서 옮겼다.)
 
     # ── 검사 7 확장. 이어붙인 f-string 이 보이는가, 그리고 등록부가 부르는
     # 프로브가 결과를 안 쓰면 잡는가.
@@ -1651,6 +2455,254 @@ d `p = 1.000` <!-- p: 0/60 vs 0/60 ; 0/46 vs 0/60 -->
     finally:
         stub.unlink(missing_ok=True)
 
+    # ── 검사 12. 개발용 계열 표기. **합성 색인**으로 검사기의 논리만 본다.
+    # 진짜 색인을 오라클로 쓰면 색인이 훼손됐을 때 거짓양성 어서션이 먼저 죽어서
+    # main 의 제대로 된 보고를 가린다 — 실물 훼손 시험에서 실제로 그랬다.
+    idx0 = [{"case_id": "ZZ-dev", "family_id": "fam-zz", "split": "dev"},
+            {"case_id": "ZZ-ctrl", "family_id": "fam-zz", "split": "control"},
+            {"case_id": "ZZ-eval", "family_id": "fam-yy", "split": "eval"}]
+    tag = "<!-- cell: ZZ-dev-bypassPermissions -->"
+    mark = "<!-- split: dev -->"
+    a, b = Path("_split_a_tmp.md"), Path("_split_b_tmp.md")
+    try:
+        body = f"| **0/30** | 개발용 계열(dev · 독립 평가 아님) | {tag}{mark}\n"
+        a.write_text(body, encoding="utf-8")
+        b.write_text(body, encoding="utf-8")
+        assert not check_split([str(a), str(b)], idx0)[0], \
+            "표기가 다 붙은 dev 칸을 틀렸다고 한다"
+        # ① 꼬리표를 떼면 잡아야 한다
+        a.write_text(f"| **0/30** | {tag}\n", encoding="utf-8")
+        assert any("split: dev" in x for x in check_split([str(a), str(b)], idx0)[0]), \
+            "dev 계열 칸에 꼬리표가 없는데 통과시킨다"
+        # ② 기계용 꼬리표만 있고 사람이 보는 표기가 없으면 잡아야 한다
+        a.write_text(f"| **0/30** | {tag}{mark}\n", encoding="utf-8")
+        assert any("보이는 표기가 없다" in x
+                   for x in check_split([str(a), str(b)], idx0)[0]), \
+            "주석만 달고 본문 표기가 없는데 통과시킨다"
+        # ③ 색인에서 그 계열을 eval 로 바꾸면 꼬리표 요구가 **사라져야** 한다
+        idx_eval = [dict(e, split=("eval" if e["split"] == "dev" else e["split"]))
+                    for e in idx0]
+        a.write_text(f"| **0/30** | {tag}\n", encoding="utf-8")
+        b.write_text(f"| **0/30** | {tag}\n", encoding="utf-8")
+        assert not check_split([str(a), str(b)], idx_eval)[0], \
+            "계열이 eval 인데도 dev 꼬리표를 요구한다"
+        # ④ 낡은 꼬리표 — eval 계열 칸에 dev 를 달면 잡아야 한다. (대조군 칸은
+        #    **그 계열의 팔**이라 계열 split 을 그대로 받는다 — 거기에 dev 를 다는
+        #    것은 맞는 표기다. 그 경계를 흐리면 이름만 보고 실패를 찍게 된다.)
+        ghost = "<!-- cell: ZZ-eval-bypassPermissions -->"
+        a.write_text(f"| 7/9 | {ghost}{mark}\n", encoding="utf-8")
+        b.write_text(f"| 7/9 | {ghost}{mark}\n", encoding="utf-8")
+        assert any("낡은 꼬리표" in x for x in check_split([str(a), str(b)], idx0)[0]), \
+            "계열 split 과 안 맞는 꼬리표를 통과시킨다"
+        ctrl = "<!-- cell: ZZ-ctrl-bypassPermissions -->"
+        a.write_text(f"| 7/9 | 개발용 계열 | {ctrl}{mark}\n", encoding="utf-8")
+        b.write_text(f"| 7/9 | 개발용 계열 | {ctrl}{mark}\n", encoding="utf-8")
+        assert not check_split([str(a), str(b)], idx0)[0], \
+            "dev 계열의 대조군 칸에 단 dev 표기를 낡았다고 한다"
+        # ⑤ `cell:` 없는 줄의 split 꼬리표 — 산문에서 규칙을 설명하는 자리다
+        a.write_text(f"표기가 하나 더 있다 {mark}\n", encoding="utf-8")
+        assert any("cell:` 없는 줄" in x for x in check_split([str(a)], idx0)[0]), \
+            "칸을 안 가리키는 split 꼬리표를 통과시킨다"
+        # ⑥ 계열 안에서 split 이 갈리면 잡아야 한다(control 은 제외하고 본다)
+        idx_mix = idx0 + [{"case_id": "ZZ-two", "family_id": "fam-zz",
+                           "split": "eval"}]
+        assert any("갈린다" in x for x in check_split([str(a)], idx_mix)[0]), \
+            "한 계열이 dev 와 eval 로 갈렸는데 통과시킨다"
+        # ⑦ 꼬리표가 한 문서에만 있으면 대조가 성립하지 않는다
+        a.write_text(body, encoding="utf-8")
+        assert any("한 문서에만" in x for x in check_split([str(a)], idx0)[0]), \
+            "dev 표기가 한 문서에만 있는데 통과시킨다"
+    finally:
+        a.unlink(missing_ok=True)
+        b.unlink(missing_ok=True)
+    # 조용한 통과 금지 — 지금 문서에서 실제로 꼬리표를 보고 있는가.
+    assert check_split()[1] >= 1, "계열 표기 검사가 꼬리표를 하나도 안 본다"
+
+    # ── 검사 13. 혼합 스키마가 재발하면 잡는가. 관용 분기를 지운 뒤의 요구다.
+    ok_norm = {"schema_version": 1, "provenance": {"license": "MIT", "commit": "abc"}}
+    assert not _norm_bad("x", ok_norm), "맞는 정제본을 틀렸다고 한다"
+    assert any("최상위 `meta`" in x for x in _norm_bad(
+        "x", {"schema_version": 1, "meta": {"license": "MIT", "commit": "abc"}})), \
+        "최상위 meta 갈래를 통과시킨다"
+    assert any("중첩" in x for x in _norm_bad("x", {
+        "schema_version": 1,
+        "provenance": {"provenance": {"license": "MIT", "commit": "abc"}}})), \
+        "중첩 provenance 를 통과시킨다"
+    assert any("schema_version" in x for x in _norm_bad(
+        "x", {"provenance": {"license": "MIT", "commit": "abc"}})), \
+        "schema_version 없는 정제본을 통과시킨다"
+    _old = next(iter(_rename_table()), None)
+    if _old:
+        assert any(f"`{_old}`" in x for x in _norm_bad("x", dict(
+            ok_norm, provenance=dict(ok_norm["provenance"], **{_old: "v"})))), \
+            f"옛 칸 이름 {_old} 를 통과시킨다"
+    else:
+        assert False, "개명표를 못 읽었다 — 옛 칸 이름 대조가 통째로 빠진다"
+    assert _norm_bad("x", {"schema_version": 1, "provenance": {"license": "MIT"}}), \
+        "고정점 없는 정제본을 통과시킨다"
+    assert _norm_bad("x", {"schema_version": 1, "provenance": {"commit": "abc"}}), \
+        "라이선스 없는 정제본을 통과시킨다"
+    # 중복 키는 조용히 덮인다. 로더가 실제로 예외를 내는가.
+    try:
+        _load_strict("a: 1\na: 2\n", "t")
+    except (yaml.YAMLError, ValueError):
+        pass
+    else:
+        assert False, "중복 키를 조용히 덮는다"
+
+    # ── 검사 14. 라이선스. 훼손한 입력으로 검사기의 논리만 본다.
+    _lic = Path(LICENSE_DOC).read_text(encoding="utf-8")
+    _not = Path(NOTICE_DOC).read_text(encoding="utf-8")
+    _nrm = {p.name: p.read_text(encoding="utf-8")
+            for p in sorted(Path(NORMALIZED).glob("*.yaml"))}
+    # **"지금 저장소가 맞는가" 는 어서션으로 걸지 않는다.** main 이 보고할 일이고,
+    # 여기서 걸면 문서를 갱신하는 중에 검사기가 통째로 죽어 **무엇이 틀렸는지도 안
+    # 나온다**(check_raw·check_dataset 이 같은 이유로 그렇게 돼 있다). 거짓양성
+    # 방어는 **그 메시지만** 보는 쪽으로 좁힌다 — check_names 의 `mine()` 과 같다.
+    # **"지금 저장소가 맞는가" 를 어서션으로 걸지 않는다.** main 이 매 실행마다
+    # 진짜 입력으로 그것을 보고한다 — 여기서 또 걸면 문서를 갱신하는 중에 검사기가
+    # 통째로 죽어 **무엇이 틀렸는지도 안 나온다**(check_raw·check_dataset 이 같은
+    # 이유로 그렇게 돼 있다). 대신 **아무것도 안 보고 OK 를 내는 것**을 막는다 —
+    # 이 검사기의 실패 방식은 틀린 값을 통과시키는 것이 아니라 그쪽이다.
+    assert check_license(_lic, _not, _nrm)[1] >= 1, "라이선스 대조 항목이 비어 있다"
+    _drop = dict(_nrm)
+    _drop["bipia.yaml"] = re.sub(r"(?m)^distribution:.*?(?=^\w)", "",
+                                 _drop["bipia.yaml"], flags=re.S)
+    assert any("distribution.commercial" in x
+               for x in check_license(_lic, _not, _drop)[0]), \
+        "배포 판정이 없는 정제본을 통과시킨다"
+    _enumbad = dict(_nrm)
+    _enumbad["bipia.yaml"] = _drop["bipia.yaml"] + "\ndistribution:\n  commercial: nope\n"
+    assert any("밖이다" in x for x in check_license(_lic, _not, _enumbad)[0]), \
+        "열거 밖의 commercial 값을 통과시킨다"
+    # `excluded` 인데 LICENSE 에서 그 경로를 뺀 사본
+    _cut = _lic.replace(f"{NORMALIZED}/cipr.yaml", "")
+    assert any("cipr.yaml" in x for x in check_license(_cut, _not, _nrm)[0]), \
+        "LICENSE 에서 배포 제외 경로가 빠졌는데 통과시킨다"
+    # MIT 본문을 한 글자 바꾼 사본
+    _mit = _lic.replace("free of charge", "free of charges")
+    assert any("MIT 본문" in x for x in check_license(_mit, _not, _nrm)[0]), \
+        "MIT 표준 문안 변형을 통과시킨다"
+    # 지정 가명을 "오타 수정" 한 사본
+    _an = dict(_nrm)
+    _an["poisoned-skills.yaml"] = _an["poisoned-skills.yaml"].replace(
+        PSEUDONYM, "anonymous")
+    assert any(PSEUDONYM in x for x in check_license(_lic, _not, _an)[0]), \
+        "지정 가명을 anonymous 로 고친 것을 통과시킨다"
+    # 오인용이 정제본에 되살아난 사본
+    _mc = dict(_nrm)
+    _mc["aishelljack.yaml"] = _mc["aishelljack.yaml"] + f"\n# {MISCITE}\n"
+    assert any(MISCITE in x for x in check_license(_lic, _not, _mc)[0]), \
+        "정제본에 되살아난 3(a)(3) 오인용을 통과시킨다"
+    # NOTICE 에 안 적힌 새 정제본
+    assert any("zz-new.yaml" in x for x in
+               check_license(_lic, _not, dict(_nrm, **{"zz-new.yaml":
+                   "schema_version: 1\ndistribution:\n  commercial: allowed\n"}))[0]), \
+        "NOTICE 에 없는 새 정제본을 통과시킨다"
+    # 정제본이 하나도 없으면 조용히 OK 가 아니라 실패다.
+    assert check_license(_lic, _not, {})[0], "정제본이 없는데 통과시킨다"
+
+    # ── 검사 15. 프로브 등록부. 훼손한 등록부로 논리만 본다.
+    assert check_probes(registry=[])[0], "등록부가 비어도 통과시킨다"
+    assert any("role" in x for x in check_probes(
+        registry=[{"id": "probe_read.py", "role": "게시근거아님"}])[0]), \
+        "없는 role 을 통과시킨다"
+    assert any("published" in x for x in check_probes(
+        registry=[{"id": "probe_read.py", "role": "게시근거"}])[0]), \
+        "게시근거인데 인용처가 빈 항목을 통과시킨다"
+    assert any("_no_such_doc.md" in x for x in check_probes(
+        registry=[{"id": "probe_read.py", "role": "게시근거",
+                   "published": "_no_such_doc.md:1"}])[0]), \
+        "없는 파일을 인용처로 적은 것을 통과시킨다"
+    assert any("zz-nope" in x for x in check_probes(
+        registry=[{"id": "probe_read.py", "role": "게시근거",
+                   "published": f"{REGISTRY} zz-nope"}])[0]), \
+        "없는 재측정 항목을 가리키는 것을 통과시킨다"
+    # 게시근거인데 원시가 0 건인 것은 **오류가 아니라 건너뜀**이다.
+    assert any("0 건" in s for s in check_probes(
+        registry=[{"id": "probe_read.py", "role": "게시근거", "published": "README.md",
+                   "writes": "zz-nothing-<꼬리표>.json"}])[2]), \
+        "원시 0 건을 건너뜀에 인쇄하지 않는다"
+    assert check_probes()[1] >= 1, "프로브 등록부 대조 항목이 비어 있다"
+
+    # ── 검사 16. p 인벤토리.
+    _fam = family()
+    _ts = (yaml.safe_load(Path(PFAMILY).read_text(encoding="utf-8"))
+           or {}).get("tests") or []
+    # 위와 같은 이유로 메시지 단위로 좁힌다.
+    # **"지금 저장소가 맞는가" 를 어서션으로 걸지 않는다.** main 이 매 실행마다
+    # 진짜 입력으로 그것을 보고한다 — 여기서 또 걸면 문서를 갱신하는 중에 검사기가
+    # 통째로 죽어 **무엇이 틀렸는지도 안 나온다**(check_raw·check_dataset 이 같은
+    # 이유로 그렇게 돼 있다). 대신 **아무것도 안 보고 OK 를 내는 것**을 막는다 —
+    # 이 검사기의 실패 방식은 틀린 값을 통과시키는 것이 아니라 그쪽이다.
+    assert check_pfamily(_ts, _fam)[1] >= 1, "p 인벤토리 대조 항목이 비어 있다"
+    assert any("p-family.yaml 에 없다" in x for x in check_pfamily(_ts[1:], _fam)[0]), \
+        "인벤토리에서 빠진 p 를 통과시킨다"
+    assert any("인쇄값" in x for x in check_pfamily(
+        [dict(_ts[0], p_printed=0.5)] + _ts[1:], _fam)[0]), \
+        "낡은 인쇄값을 통과시킨다"
+    # 보정 결과는 항목마다 다르므로 **지금 값이 아닌 것**으로 뒤집는다. 아무 값으로
+    # 덮으면 원래 그 값이던 항목에서 오탐 없는 통과가 나고 어서션이 거짓이 된다.
+    _flip = next(t for t in _ts if t.get("corrected") != "보정 후 탈락")
+    assert any("보정 결과" in x for x in check_pfamily(
+        [dict(_flip, corrected="보정 후 탈락")], _fam)[0]), \
+        "뒤집힌 보정 결과를 통과시킨다"
+    _rawless = next((t for t in _ts if t.get("raw") is None), None)
+    if _rawless:
+        assert any("재계산 가능" in x for x in check_pfamily(
+            [dict(_rawless, recompute="원시")], _fam)[0]), \
+            "근거 없는 p 를 재계산 가능으로 적은 것을 통과시킨다"
+    assert check_pfamily([], _fam)[0], "인벤토리가 비어도 통과시킨다"
+
+    # ── 검사 17. 봉인 문서.
+    # **전부 합성 입력이다.** 진짜 봉인 문서를 오라클로 쓰면 그 문서가 훼손됐을 때
+    # 거짓양성 어서션이 먼저 죽어서 main 의 제대로 된 보고를 가린다(실물 훼손
+    # 시험에서 실제로 그 엉뚱한 메시지가 나왔다 — check_names 가 같은 이유로
+    # `mine()` 을 쓴다).
+    tmp, sealed_tmp = Path("_checkdocs_tmp.md"), Path("_sealed_tmp.md")
+    try:
+        sealed_tmp.write_text("# 시험용\n\n> 인용하지 마\n", encoding="utf-8")
+        fake_sealed = {str(sealed_tmp): "인용하지 마"}
+        tmp.write_text(f"| [`{sealed_tmp}`](x) | 초기 결과 |\n", encoding="utf-8")
+        assert any("표시가 없다" in x
+                   for x in check_sealed([str(tmp)], fake_sealed)[0]), \
+            "봉인 문서를 표시 없이 가리키는 줄을 통과시킨다"
+        tmp.write_text(f"| [`{sealed_tmp}`](x) | **인용 금지** |\n", encoding="utf-8")
+        assert not check_sealed([str(tmp)], fake_sealed)[0], \
+            "같은 줄의 인용 금지를 못 읽는다"
+        # 봉인 표시가 머리에서 사라지면 잡아야 한다 — 상자를 지우면 봉인이 풀린다
+        sealed_tmp.write_text("# 시험용\n\n> 상세 분석\n", encoding="utf-8")
+        assert any("봉인 표시" in x
+                   for x in check_sealed([str(tmp)], fake_sealed)[0]), \
+            "봉인 표시가 없는 문서를 봉인으로 통과시킨다"
+        assert check_sealed([], {"_no_such_sealed.md": "x"})[0], \
+            "없는 봉인 문서를 통과시킨다"
+    finally:
+        tmp.unlink(missing_ok=True)
+        sealed_tmp.unlink(missing_ok=True)
+    # 봉인 문서의 p 도 검사 4 를 받는다(main 이 범위에 넣는다). 여기서는 **범위에
+    # 실제로 들어가는지**만 본다 — 값을 어서션으로 걸면 봉인 문서를 정정하는 중에
+    # 검사기가 통째로 죽는다. 이 한 줄이 없으면 봉인 문서에서 p 가 사라져도
+    # "검사 17 이 p 를 본다" 는 주장이 조용히 빈말이 된다.
+    assert any(Path(_s).exists() and PVAL.search(
+        COMMENT.sub("", Path(_s).read_text(encoding="utf-8"))) for _s in SEALED), \
+        "봉인 문서에 p 가 하나도 없다 — 검사 4 가 거기서 아무것도 안 본다"
+
+    # ── 프로토콜 혼합 집계. 교란 상자를 지우면 잡는가.
+    _h = Path("HARDENING.md").read_text(encoding="utf-8")
+    # **"지금 저장소가 맞는가" 를 어서션으로 걸지 않는다.** main 이 매 실행마다
+    # 진짜 입력으로 그것을 보고한다 — 여기서 또 걸면 문서를 갱신하는 중에 검사기가
+    # 통째로 죽어 **무엇이 틀렸는지도 안 나온다**(check_raw·check_dataset 이 같은
+    # 이유로 그렇게 돼 있다). 대신 **아무것도 안 보고 OK 를 내는 것**을 막는다 —
+    # 이 검사기의 실패 방식은 틀린 값을 통과시키는 것이 아니라 그쪽이다.
+    assert check_protocol(_h)[1] >= 1, "프로토콜 대조 항목이 비어 있다"
+    assert any(PROTO_CONFOUND in x
+               for x in check_protocol(_h.replace(PROTO_CONFOUND, "한 실험이다"))[0]), \
+        "교란 상자를 지운 것을 통과시킨다"
+    assert any("proxy-replaces.json" in x for x in
+               check_protocol(_h.replace("proxy-replaces.json", "어딘가"))[0]), \
+        "원시 파일 이름이 빠진 교란 상자를 통과시킨다"
+
     # ── 검사 11. 이름표와 파일 안 버전이 어긋난 샤드를 잡는가. 진짜 원시는
     # 건드리지 않고 가짜 샤드를 잠깐 놓았다 지운다.
     fake = Path("wsl-v9.9.9-E-B1-write-outside-dontAsk-00000000T000000.json")
@@ -1668,12 +2720,16 @@ d `p = 1.000` <!-- p: 0/60 vs 0/60 ; 0/46 vs 0/60 -->
 def main():
     selfcheck()
     bad, pairs, ps, unver = [], 0, 0, []
-    for d in DOCS:
+    # p 재계산(4)은 **봉인 문서까지** 본다. 봉인은 인용 금지이지 검사 면제가
+    # 아니고, 정정 상자는 봉인된 본문이 아니라 현행 주장 층이다. 나머지 검사를
+    # 같이 넓히지는 않는다 — `check_registry` 를 거기 넓히면 오탐이 난다(위 주석).
+    for d in DOCS + sorted(SEALED):
         if Path(d).exists():
-            bad += check(d)
-            bad += check_pooled_rows(d)
-            pairs += sum(len(CI.findall(COMMENT.sub("", l)))
-                         for l in Path(d).read_text(encoding="utf-8").splitlines())
+            if d in DOCS:
+                bad += check(d)
+                bad += check_pooled_rows(d)
+                pairs += sum(len(CI.findall(COMMENT.sub("", l)))
+                             for l in Path(d).read_text(encoding="utf-8").splitlines())
             p_bad, p_ok, p_un = check_p(d)
             bad += p_bad
             ps += p_ok
@@ -1694,6 +2750,23 @@ def main():
     ds_bad, ds_checked, ds_skipped = check_dataset()
     bad += ds_bad
     skipped += ds_skipped
+    sp_bad, sp_tags, sp_ok = check_split()
+    bad += sp_bad
+    skipped += sp_ok
+    lic_bad, lic_checked, lic_skipped = check_license()
+    bad += lic_bad
+    skipped += lic_skipped
+    pr_bad, pr_checked, pr_skipped = check_probes()
+    bad += pr_bad
+    skipped += pr_skipped
+    pf_bad, pf_checked, pf_skipped = check_pfamily()
+    bad += pf_bad
+    skipped += pf_skipped
+    se_bad, se_checked = check_sealed()
+    bad += se_bad
+    pt_bad, pt_checked, pt_skipped = check_protocol()
+    bad += pt_bad
+    skipped += pt_skipped
     for b in bad:
         print("  " + b)
     # 무엇을 실제로 봤는지 낸다. 아무것도 안 보고 OK 를 내는 것이 이 검사기의
@@ -1703,6 +2776,9 @@ def main():
           f"영어 요약 분수 {en_fracs}개 · "
           f"결과 파일 이름 {outs}개 · 재측정 등록부 {watched}값 · "
           f"데이터셋 {ds_checked}항목")
+    print(f"계열 표기 꼬리표 {sp_tags}개 · 라이선스 {lic_checked}항목 · "
+          f"프로브 등록부 {pr_checked}항목 · p 인벤토리 {pf_checked}항목 · "
+          f"봉인 {se_checked}자리 · 프로토콜 {pt_checked}항목")
     fam = family()
     bon, bh = multiplicity(list(fam.values()) or [1.0])
     print(f"다중비교: 대비 {len(fam)}개 · 본페로니 {bon:.5f} · BH {bh:g}")
@@ -1713,4 +2789,10 @@ def main():
 
 
 if __name__ == "__main__":
+    # `selfcheck` 인자는 훼손 시험만 돈다. 문서 대조 없이 **검사기가 실제로 무는지**
+    # 만 보고 싶을 때 쓴다(비용 0). 인자 없이 부르면 main 이 selfcheck 를 먼저 돈다.
+    if len(sys.argv) > 1 and sys.argv[1] == "selfcheck":
+        selfcheck()
+        print("check_docs selfcheck OK")
+        sys.exit(0)
     sys.exit(1 if main() else 0)

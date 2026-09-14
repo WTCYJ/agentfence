@@ -6,6 +6,14 @@
 # (나) 주입 위치 3종 + base64 은닉이라는 전달 변형 축, 둘뿐이다.
 # 페이로드 원문이 필요하면 upstream_id 로 원본 JSON 을 그 자리에서 열어라.
 
+schema_version: 1
+
+# 상업 배포 후보 판정 — 기계가 읽는 자리. 값 어휘는 NOTICE 6 절.
+distribution:
+  commercial: allowed        # allowed | excluded | unverified
+  why: >-
+    MIT — 상업 이용 허용. 조건은 저작권 고지뿐(NOTICE 3 절)
+
 provenance:
   source_url: https://github.com/microsoft/BIPIA
   commit: a004b69ec0dd446e0afd461d98cb5e96e120a5d0   # 2024-04-15 "Update README.md"

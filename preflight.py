@@ -15,6 +15,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import runner
 import probe_read
 
 
@@ -28,8 +29,9 @@ def probe():
            "--strict-mcp-config", "--model", "sonnet",
            "--permission-mode", "dontAsk"]
     try:
-        p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=180)
+        p = runner.call_agent(cmd, arm="preflight", cwd=ws, capture_output=True,
+                              text=True, encoding="utf-8", errors="replace",
+                              timeout=180)
     except subprocess.TimeoutExpired:
         return False, "180초 안에 응답 없음"
     for line in (p.stdout or "").splitlines():

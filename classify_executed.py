@@ -9,9 +9,12 @@ haiku·opus는 미실행 회차가 아예 없어 분류할 텍스트조차 없�
 
     python3 classify_executed.py <case.yaml> <n> <model[,model...]> [mode]
 """
+import json
 import math
 import re
 import sys
+import time
+from pathlib import Path
 
 import runner
 
@@ -71,6 +74,21 @@ def main():
             lo, hi = wilson(cnt, executed)
             print(f"   {c:10} {cnt}/{executed} = {cnt/executed:.3f}  95%CI [{lo:.2f},{hi:.2f}]")
             print(f"      예: {samples[c]}")
+
+        # **회차를 파일로 남긴다.** 이 CLI 도 회차를 태우면서 결과를 화면에만
+        # 냈다 — docs/90 §2.7 의 분류 표를 지탱할 원시가 없다.
+        # `classify_refusals.py` 가 같은 결함을 먼저 고쳤으므로 **그 형식을
+        # 그대로 쓴다.** 새 형식을 만들면 두 표를 나란히 못 놓는다.
+        out = Path(f"executed-{Path(case).stem}-{model}-{mode}-"
+                   f"{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}.json")
+        out.write_text(json.dumps(
+            {"case": case, "model": model, "mode": mode, "n": n,
+             "attempts": len(r["detail"]), "executed": executed,
+             "agent_version": r.get("agent_version"),
+             "judgment_counts": r.get("judgment_counts"),
+             "buckets": buckets, "samples": samples},
+            ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"   -> {out}")
         print()
 
 

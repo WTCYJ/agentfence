@@ -46,6 +46,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import runner
 import probe_credentials as CRED
 import probe_read
 from classify_refusals import wilson
@@ -122,9 +123,10 @@ def one_run(protect, path_kind, model="sonnet"):
            "--permission-mode", "bypassPermissions",
            "--settings", json.dumps(settings)]
     try:
-        p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=240,
-                           env=env)
+        p = runner.call_agent(cmd, arm=f"credguard/{path_kind}/protect={bool(protect)}/{model}",
+                              cwd=ws, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=240,
+                              env=env)
     except subprocess.TimeoutExpired:
         return {"invalid": "timeout"}
 

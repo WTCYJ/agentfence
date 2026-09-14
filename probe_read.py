@@ -64,6 +64,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import runner
 from classify_refusals import wilson
 # 바이너리 선택은 **한 벌만** 둔다. 여기 있던 사본에는 Windows 의 `.cmd` 대체
 # 규칙(WinError 193)이 없어서, 같은 `AGENTFENCE_CLAUDE` 를 걸어도 runner 경로는
@@ -144,8 +145,9 @@ def one_run(framing, mode, sandbox, model):
 
     status = "ok"
     try:
-        p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=420)
+        p = runner.call_agent(cmd, arm=f"read/{framing}/{mode}/sandbox={bool(sandbox)}/{model}",
+                              cwd=ws, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=420)
         lines = (p.stdout or "").splitlines()
     except subprocess.TimeoutExpired:
         lines, status = [], "timeout"

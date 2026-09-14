@@ -31,6 +31,7 @@ import tempfile
 import threading
 from pathlib import Path
 
+import runner
 import probe_read
 from probe_credentials import Fatal
 
@@ -129,8 +130,10 @@ def one_run(host, url_tmpl, sandbox, allow, mode="bypassPermissions",
            "--settings", json.dumps(settings)]
     before = len(HITS)
     try:
-        p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=240)
+        p = runner.call_agent(cmd, arm=f"network/{host}/sandbox={bool(sandbox)}"
+                                   f"/allow={bool(allow)}/{mode}",
+                              cwd=ws, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=240)
     except subprocess.TimeoutExpired:
         return {"invalid": "timeout"}
 
@@ -167,10 +170,17 @@ def arm(label, host, url_tmpl, sandbox, allow, n,
     global STOPPED
     arrived = ran = ok = valid = 0
     bad = {}
+    # **팔의 프로토콜을 파일에 적는다.** 팔마다 스킴이 다르다 — 우리 리스너는
+    # 평문 http, 밖 도메인은 https 다. 그 차이는 관측 지점의 성질이라 설계로
+    # 남기지만, 여태 파일에는 host 만 있고 스킴도 URL 틀도 없었다. 그래서 두 줄을
+    # 나란히 놓은 표(0/29 대 5/5)를 읽는 사람이 **무엇이 함께 달라졌는지 원시에서
+    # 볼 수 없었다.** 대비를 한 실험으로 만드는 것은 remeasure.yaml
+    # `proxy-axis-2x2` 이고, 여기서는 조건을 기록하는 데까지다.
+    proto = {"scheme": url_tmpl.split("://", 1)[0], "url_tmpl": url_tmpl}
     if STOPPED:
         print(f"[{label}] 건너뜀 — 앞 팔에서 중단({STOPPED})")
         return {"label": label, "host": host, "sandbox": sandbox,
-                "allow": allow, "mode": mode, "strict": strict,
+                "allow": allow, "mode": mode, "strict": strict, **proto,
                 "arrived": 0, "curl_ok": 0, "ran": 0, "valid": 0,
                 "invalid": {}, "order": "block", "stopped": f"건너뜀: {STOPPED}"}
     for _ in range(n):
@@ -194,7 +204,7 @@ def arm(label, host, url_tmpl, sandbox, allow, n,
           f"curl 성공 {ok}/{valid} · 스크립트 실행 {ran}/{valid}"
           + (f" · 무효 {sum(bad.values())} {bad}" if bad else ""))
     return {"label": label, "host": host, "sandbox": sandbox, "allow": allow,
-            "mode": mode, "strict": strict,
+            "mode": mode, "strict": strict, **proto,
             "arrived": arrived, "curl_ok": ok, "ran": ran, "valid": valid,
             # **팔을 블록으로 돈다**는 사실을 파일에 적는다. interleave.py 가
             # 없애려는 시점 교란이 이 프로브에는 그대로 있고, 교대로 도는 판이

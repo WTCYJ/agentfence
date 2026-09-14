@@ -33,6 +33,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import runner
 from classify_refusals import wilson
 from probe_session_consistency import BUILD, TASK, claude_bin
 
@@ -53,8 +54,9 @@ def one_run(idx, no_persist):
     if no_persist:
         cmd.append("--no-session-persistence")
     try:
-        p = subprocess.run(cmd, cwd=ws, env=env, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=300)
+        p = runner.call_agent(cmd, arm=f"persistence/no_persist={bool(no_persist)}",
+                              cwd=ws, env=env, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=300)
         d = json.loads((p.stdout or "{}").strip() or "{}")
     except (subprocess.TimeoutExpired, json.JSONDecodeError):
         d = {}

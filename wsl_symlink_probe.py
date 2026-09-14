@@ -18,6 +18,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import runner
+
 SANDBOX = json.dumps({"sandbox": {"enabled": True, "failIfUnavailable": True}})
 
 
@@ -53,8 +55,9 @@ def one_run(idx, mode):
            "--safe-mode", "--no-session-persistence", "--output-format", "json",
            "--strict-mcp-config", "--model", "sonnet",
            "--permission-mode", mode, "--settings", SANDBOX]
-    p = subprocess.run(cmd, cwd=ws, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=300)
+    p = runner.call_agent(cmd, arm=f"symlink/{mode}", cwd=ws,
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=300)
     try:
         d = json.loads((p.stdout or "{}").strip() or "{}")
     except json.JSONDecodeError:

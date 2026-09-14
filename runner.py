@@ -4,8 +4,13 @@ W2 범위: 워크스페이스 프로비저닝, 파일시스템 센서, 반복 �
 에이전트 어댑터는 W3. 여기서는 exec 어댑터(하네스 직접 실행)만 동작한다.
 
     python runner.py selftest              센서 건전성 검증 (W2 완료 판정)
-    python runner.py run cases/*.yaml      케이스 실행
+    AGENTFENCE_BUDGET=10 python runner.py run cases/*.yaml      케이스 실행
+
+유료 회차는 `AGENTFENCE_BUDGET` 없이 나가지 않는다 — `call_agent` 의 관문이
+승인·예산과 장부를 호출 **전에** 확인하고, 없으면 `BudgetDenied` 로 죽는다.
+selftest 는 회차를 안 태우므로(대조군 케이스는 `agents: []`) 예산이 필요 없다.
 """
+import ast
 import hashlib
 import json
 import re
@@ -251,13 +256,308 @@ def claude_bin():
     return p
 
 
+_VERSION = {}
+
+
 def agent_version():
+    # 바이너리별로 한 번만 묻는다. 판마다 두 번씩 부르던 것을 줄인 것이고
+    # (계획 기록 + 결과 기록), 값은 프로세스 수명 안에서 안 바뀐다.
+    b = claude_bin()
+    if b not in _VERSION:
+        try:
+            p = subprocess.run([b, "--version"], capture_output=True,
+                               text=True, encoding="utf-8", errors="replace", timeout=60)
+            _VERSION[b] = (p.stdout or "").strip().split()[0]
+        except Exception:
+            _VERSION[b] = "unknown"
+    return _VERSION[b]
+
+
+# ── 유료 회차 장부 ───────────────────────────────────────────────────
+# 왜 여기인가. 프로브마다 `subprocess.run([claude, ...])` 를 직접 부르고 결과를
+# 콘솔로만 냈다 — 그렇게 태운 회차는 **어디에도 안 남는다.** 게시된 값이 원시에
+# 못 묶여 통째로 빠진 자리가 여럿이다. 프로브를 하나씩 고치면 다음 프로브가
+# 또 안 남기므로, 호출이 지나는 **한 지점**에 둔다.
+#
+# 장부는 결과 파일이 아니다. 결과 파일은 프로브가 자기 축으로 쓰고, 장부는
+# "무엇을 언제 몇 회차 태웠는가" 를 축과 무관하게 쌓는다. 둘은 다른 질문이다.
+RUNLOG = Path(__file__).parent / "run-log"
+
+
+class LedgerDown(RuntimeError):
+    """장부가 준비 안 됐거나 도중에 깨졌다. **회차를 더 태우지 않는다.**
+
+    기록 없는 회차는 예산만 쓰고 인용할 수 없다 — 이 저장소가 이미 그렇게
+    태운 회차가 있다. 기록이 안 되면 부르지 않는 쪽이 싸다.
+    """
+
+
+# 키 이름과 값 모양 양쪽으로 본다. 이름만 보면 `{"h": "sk-..."}` 가 새고,
+# 값만 보면 우리가 모르는 모양의 토큰이 샌다.
+SECRET_KEY = re.compile(r"(?i)key|token|secret|password|passwd|credential|cookie|auth")
+SECRET_VAL = re.compile(r"(?i)\b(sk-[\w-]{12,}|ghp_\w{8,}|AKIA[0-9A-Z]{12,}"
+                        r"|Bearer\s+\S+|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{6,})")
+
+
+def scrub(v, key=""):
+    """비밀값은 장부에 안 적는다. 지우는 것이 아니라 **처음부터 안 적는다.**"""
+    if isinstance(v, dict):
+        return {k: scrub(x, str(k)) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [scrub(x, key) for x in v]
+    if not isinstance(v, str):
+        return v
+    if SECRET_KEY.search(key):
+        return "<redacted>"
+    return SECRET_VAL.sub("<redacted>", v)
+
+
+def result_event(stdout):
+    """`--output-format json` 과 `stream-json` 양쪽에서 result 이벤트를 꺼낸다.
+
+    프로브마다 출력 형식이 달라서 장부가 형식을 고르면 반쪽만 기록된다.
+    """
+    raw = (stdout or "").strip()
+    if not raw:
+        return {}
     try:
-        p = subprocess.run([claude_bin(), "--version"], capture_output=True,
-                           text=True, encoding="utf-8", errors="replace", timeout=60)
-        return (p.stdout or "").strip().split()[0]
-    except Exception:
-        return "unknown"
+        d = json.loads(raw)
+        if isinstance(d, dict):
+            return d
+    except json.JSONDecodeError:
+        pass
+    for line in reversed(raw.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            d = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(d, dict) and (d.get("type") == "result" or "is_error" in d):
+            return d
+    return {}
+
+
+def usage_facts(d):
+    """종료 상태와 사용량. 없는 값은 None 으로 **남긴다** — 키가 없는 것과
+    0 인 것은 읽는 쪽에서 구별이 안 된다."""
+    u = d.get("usage") or {}
+    return {"is_error": d.get("is_error"),
+            "api_error_status": d.get("api_error_status"),
+            "terminal_reason": d.get("terminal_reason"),
+            "num_turns": d.get("num_turns"),
+            "cost_usd": d.get("total_cost_usd"),
+            "tokens": {k: u[k] for k in
+                       ("input_tokens", "output_tokens",
+                        "cache_read_input_tokens", "cache_creation_input_tokens")
+                       if u.get(k) is not None} or None}
+
+
+class Ledger:
+    """유료 회차를 **시작 전에** 적는 append-only 장부.
+
+    한 줄 = 한 사건. `open` · `plan` · `call`(start/end) · `run` 넷이다.
+    매 줄 flush + fsync 한다 — 강제 종료로 죽어도 시작 기록은 남아야 하고,
+    남지 않으면 "안 돌았다" 와 "돌다 죽었다" 가 구별되지 않는다.
+
+    재개는 `AGENTFENCE_RUN_ID` 로 같은 파일에 이어 붙인다. 일련번호는 파일에서
+    이어 읽으므로 `call_id` 가 재개 후에도 안 겹치고, 그래서 집계(`tally`)가
+    같은 회차를 두 번 세지 않는다.
+    """
+
+    def __init__(self, root=None, run_id=None):
+        self.root = Path(root or os.environ.get("AGENTFENCE_RUNLOG") or RUNLOG)
+        self.run_id = (run_id or os.environ.get("AGENTFENCE_RUN_ID")
+                       or f"{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}-{os.getpid()}")
+        self.broken = None
+        self.seq = 0
+        try:
+            self.root.mkdir(parents=True, exist_ok=True)
+            self.path = self.root / f"{self.run_id}-ledger.jsonl"
+            self.resumed = self.path.exists()
+            if self.resumed:
+                self.seq = max([r.get("seq", 0) for r in read_ledger(self.path)] or [0])
+            # newline="\n" — 이 저장소의 기록은 LF 다. 줄끝이 섞이면 diff 가
+            # 파일 전체로 부풀어 실제 변경이 안 보인다.
+            self.fh = self.path.open("a", encoding="utf-8", newline="\n")
+        except OSError as e:
+            # **여기서 죽는 것이 설계다.** 부르는 쪽은 아직 회차를 안 태웠다.
+            raise LedgerDown(f"장부를 못 연다 ({e}) — 회차를 시작하지 않는다")
+        self.write({"rec": "open", "resumed": self.resumed,
+                    "argv": scrub(sys.argv), "cwd": os.getcwd(),
+                    "claude_bin": claude_bin(),
+                    "machine": os.environ.get("AGENTFENCE_MACHINE", ""),
+                    "tag": os.environ.get("AGENTFENCE_TAG", "")})
+
+    def write(self, rec):
+        if self.broken:
+            raise LedgerDown(f"장부가 깨져 있다 ({self.broken}) — 회차를 더 안 태운다")
+        self.seq += 1
+        rec = {"run_id": self.run_id, "seq": self.seq,
+               "t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **rec}
+        try:
+            self.fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            self.fh.flush()
+            os.fsync(self.fh.fileno())
+        except (OSError, ValueError) as e:
+            # 기록이 실패한 순간부터 **모든** 후속 호출을 막는다. 중단 상태는
+            # 이미 디스크에 있는 줄들이 그대로 보존한다.
+            self.broken = repr(e)
+            raise LedgerDown(f"장부 기록 실패 ({e}) — 이 실행의 남은 회차를 중단한다")
+        return rec
+
+    def plan(self, **kw):
+        """무엇을 몇 회차 태울 작정인가. **첫 호출 전에** 적는다."""
+        return self.write({"rec": "plan", **scrub(kw)})
+
+    def call(self, cmd, **cond):
+        rec = self.write({"rec": "call", "phase": "start",
+                          "cmd": scrub(list(cmd)), **scrub(cond)})
+        return f"{self.run_id}#{rec['seq']}"
+
+    def done(self, call_id, **out):
+        return self.write({"rec": "call", "phase": "end",
+                           "call_id": call_id, **scrub(out)})
+
+    def close(self):
+        try:
+            self.fh.close()
+        except Exception:
+            pass
+
+
+def read_ledger(path):
+    """깨진 줄은 건너뛰고 읽는다 — 강제 종료는 마지막 줄을 반쯤 남긴다."""
+    out = []
+    for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return out
+
+
+def tally(path):
+    """장부 하나의 집계. 재개분을 **중복해서 세지 않는다.**
+
+    시작만 있고 끝이 없는 호출은 `killed` 다 — 0 으로 세지 않는다. 그 회차는
+    예산을 썼고 결과를 모른다.
+    """
+    started, ended = {}, {}
+    for r in read_ledger(path):
+        if r.get("rec") != "call":
+            continue
+        if r.get("phase") == "start":
+            started[f"{r['run_id']}#{r['seq']}"] = r
+        elif r.get("call_id"):
+            ended[r["call_id"]] = r
+    return {"calls": len(started), "ended": len(ended),
+            "killed": sorted(set(started) - set(ended)),
+            "cost_usd": round(sum(e.get("cost_usd") or 0 for e in ended.values()), 4)}
+
+
+_LEDGER = None
+
+
+def ledger():
+    """이 프로세스의 장부. 처음 부를 때 열리고, 못 열면 LedgerDown 이다."""
+    global _LEDGER
+    if _LEDGER is None:
+        _LEDGER = Ledger()
+    return _LEDGER
+
+
+class BudgetDenied(RuntimeError):
+    """승인·예산 없이 유료 회차를 부르려 했다. **부르지 않는다.**
+
+    사고 때 유일한 보호막은 `repro_exec_rate.py` 한 파일의 `__main__` 가드였고,
+    임포트 한 줄이 그것을 우회해 호출 8 건이 나갔다. 가드는 파일마다 있어야
+    하지만 **관문은 호출이 지나는 한 지점에** 있어야 한다 — 다음 파일이 또
+    가드를 빠뜨려도 관문은 그대로 선다.
+    """
+
+
+# 왜 환경변수인가. 이 저장소의 실행 조건은 이미 전부 환경변수로 들어온다
+# (`AGENTFENCE_CLAUDE` · `_RUN_ID` · `_RUNLOG` · `_TAG` …). 승인을 커밋된
+# 설정 파일에 두면 그 파일이 승인을 대신하게 되고, 승인이 저장소에 눌러앉아
+# 다음 사람이 모르는 채로 물려받는다. 환경변수는 **그 실행에만** 붙는다.
+BUDGET_ENV = "AGENTFENCE_BUDGET"
+
+
+def budget_gate(led):
+    """호출 직전 관문. 승인·예산이 없으면 **거절이 기본값**이다.
+
+    예산은 프로세스 안의 카운터가 아니라 **장부에서** 센다. 카운터로 세면
+    재실행·재개가 예산을 매번 처음부터 다시 주고, 그러면 상한이 상한이 아니다.
+    시작만 있고 끝이 없는 호출(강제 종료)도 센다 — 그 회차는 이미 예산을 썼다.
+
+    ponytail: 상한은 장부 하나(`run_id`) 단위다. 새 실행 ID 는 새 예산을 받는다.
+    막는 것은 "한 실행이 예산을 넘겨 계속 도는 것" 이지 "사람이 여러 번 승인하는
+    것" 이 아니다. 달 단위 총량이 필요해지면 `run-log/*.jsonl` 합산으로 올린다.
+    """
+    raw = (os.environ.get(BUDGET_ENV) or "").strip()
+    if not raw:
+        raise BudgetDenied(
+            f"{BUDGET_ENV} 가 없다 — 유료 회차를 부르지 않는다. 태울 작정이면 "
+            f"태울 회차 수를 명시해라 (예: {BUDGET_ENV}=10). 기본값은 거절이다")
+    try:
+        cap = int(raw)
+    except ValueError:
+        raise BudgetDenied(f"{BUDGET_ENV}={raw!r} 를 회차 수로 못 읽는다 — 거절한다")
+    if cap <= 0:
+        raise BudgetDenied(f"{BUDGET_ENV}={cap} — 예산이 0 이다. 거절한다")
+    used = tally(led.path)["calls"]
+    if used >= cap:
+        raise BudgetDenied(
+            f"예산 소진 — 장부 {led.path.name} 에 이미 호출 {used} 건이 있고 "
+            f"상한은 {cap} 이다. 더 태우려면 {BUDGET_ENV} 를 올려라")
+    return cap - used
+
+
+_REAL_RUN = subprocess.run
+
+
+def call_agent(cmd, *, arm, **kw):
+    """유료 회차 하나. **관문을 통과해야 나간다.**
+
+    호출 **전에** 셋을 본다: 승인·예산(`AGENTFENCE_BUDGET`), 장부를 열 수
+    있는가, 남은 예산이 있는가. 하나라도 아니면 예외로 죽는다 — 조용히
+    건너뛰면 기록도 상한도 없는 회차가 예산을 쓴다.
+
+    프로브는 `subprocess.run` 대신 이걸 부른다. 인자는 그대로 넘어가므로
+    바꾸는 것은 호출 이름과 `arm`(어느 팔의 회차인가) 하나뿐이다.
+    """
+    if subprocess.run is not _REAL_RUN:
+        # 여러 프로브의 selfcheck 가 `subprocess.run` 을 스텁으로 갈아 끼운다.
+        # 그건 유료 회차가 아니므로 장부에 적지 않는다 — 적으면 시험 기록이
+        # 증거 폴더에 섞이고, 장부의 회차 수가 예산과 안 맞게 된다.
+        return subprocess.run(cmd, **kw)
+    led = ledger()
+    left = budget_gate(led)
+    cid = led.call(cmd, arm=arm, cwd=str(kw.get("cwd") or ""), budget_left=left,
+                   # env 전체는 안 적는다 — 비밀값이 거기 산다. 조건에 해당하는
+                   # 것만 골라 적는다.
+                   env_marks={k: (kw.get("env") or {}).get(k)
+                              for k in ("PATH", "XDG_CACHE_HOME", "HTTPS_PROXY",
+                                        "HTTP_PROXY", "NO_PROXY")
+                              if (kw.get("env") or {}).get(k)})
+    t0 = time.time()
+    try:
+        p = subprocess.run(cmd, **kw)
+    except BaseException as e:
+        # 타임아웃·강제 종료도 회차를 태운다. 끝 기록이 없으면 tally 가
+        # `killed` 로 센다 — 0 으로 세면 미관측이 결과가 된다.
+        led.done(cid, rc=None, secs=round(time.time() - t0, 2),
+                 error=f"{type(e).__name__}: {str(e)[:200]}")
+        raise
+    led.done(cid, rc=p.returncode, secs=round(time.time() - t0, 2),
+             stderr_head=(p.stderr or "")[:400],
+             **usage_facts(result_event(p.stdout)))
+    return p
 
 
 def claude_cmd(case, ws):
@@ -324,8 +624,9 @@ def adapter_claude_code(case, ws):
     # 에이전트가 300초를 넘겨 프로브가 통째로 죽었다. RunInvalid 로 내려 보내면
     # 그 회차만 무효가 되고 재시도된다.
     try:
-        p = subprocess.run(
-            cmd, cwd=ws.workspace, env=ws.env, capture_output=True,
+        p = call_agent(
+            cmd, arm=f"{case['id']}/{case.get('permission_mode', 'dontAsk')}",
+            cwd=ws.workspace, env=ws.env, capture_output=True,
             text=True, encoding="utf-8", errors="replace", timeout=300)
     except subprocess.TimeoutExpired:
         raise RunInvalid("300초 타임아웃 — 회차 미성립")
@@ -427,8 +728,9 @@ def adapter_claude_bg(case, ws):
         "--permission-mode", case.get("permission_mode", "auto"),
     ]
     launch = ws.workspace / case["cwd"] if case.get("cwd") else ws.workspace
-    p = subprocess.run(cmd, cwd=launch, env=ws.env, capture_output=True,
-                       text=True, encoding="utf-8", errors="replace", timeout=120)
+    p = call_agent(cmd, arm=f"{case['id']}/bg", cwd=launch, env=ws.env,
+                   capture_output=True, text=True, encoding="utf-8",
+                   errors="replace", timeout=120)
     out = (p.stdout or "") + (p.stderr or "")
     m = re.search(r"backgrounded\s*[·・]\s*(\w+)", out)
     if not m:
@@ -611,11 +913,37 @@ def judge(res, case):
     return "INCONCLUSIVE", "시도 여부와 차단 여부를 가를 재료가 없다", None
 
 
+def paid(case):
+    """이 케이스가 모델을 부르는가. exec 어댑터는 하네스가 직접 도는 것이라 공짜다."""
+    return pick_adapter(case) is not adapter_exec
+
+
+# 장부에 싣는 회차 증거. 목록으로 두는 이유는 **빠뜨림을 눈에 보이게** 하기
+# 위해서다 — `res` 를 통째로 실으면 응답 원문까지 들어가 장부가 결과 파일이
+# 되고, 골라 실으면 어느 키를 안 실었는지 여기 한 줄로 드러난다.
+RUN_EVIDENCE = ("valid", "reason", "violated", "hits", "writes", "canary_leaked",
+                "witness_ok", "receipt", "scan_hits", "denials", "defense_layer",
+                "judgment", "judgment_reason", "judgment_layer")
+
+
 def run_once(case, index):
     """회차 하나. 판정 다섯 범주는 여기서 붙인다 — 반환 지점이 여럿이라
     바깥에서 한 번만 붙여야 빠지는 경로가 안 생긴다."""
+    t0 = time.time()
     res = _run_once(case, index)
     res["judgment"], res["judgment_reason"], res["judgment_layer"] = judge(res, case)
+    if paid(case):
+        # 장부 기록이 실패하면 LedgerDown 이 그대로 올라가 **다음 회차를 막는다.**
+        # 여기서 삼키면 이후 회차가 기록 없이 예산만 쓴다.
+        ledger().write({
+            "rec": "run", "case": case["id"], "index": index,
+            "mode": case.get("permission_mode", "dontAsk"),
+            "model": case.get("model", "sonnet"),
+            "settings": case.get("required_settings") or {},
+            "secs": round(time.time() - t0, 2),
+            "tool_calls": [{"tool": t.get("tool"), "error": t.get("error"),
+                            "sub": t.get("sub")} for t in res.get("tool_calls") or []],
+            **{k: res[k] for k in RUN_EVIDENCE if k in res}})
     return res
 
 
@@ -744,6 +1072,15 @@ def run_case(path, repeat=None, mode=None, model=None, settings=None):
     if model:
         case["model"] = model
     n = repeat or case.get("repeat", 10)
+    # **계획을 첫 회차 전에 적는다.** 장부를 못 열면 여기서 LedgerDown 이고,
+    # 그 시점에는 아직 한 회차도 안 태웠다. 기록 없이 도는 판을 원천에서 막는
+    # 유일한 자리다 — 회차가 시작된 뒤에 확인하면 이미 늦다.
+    if paid(case):
+        ledger().plan(target=str(path), case=case["id"], n=n, cap=n * 3,
+                      mode=case.get("permission_mode", "dontAsk"),
+                      model=case.get("model", "sonnet"),
+                      settings=case.get("required_settings") or {},
+                      agent_version=agent_version())
     # 유효 회차가 n에 찰 때까지 재시도한다(최대 3n). 위임 실패·인증 오류는
     # 경계의 성질이 아니라 시나리오가 성립하지 않은 것이므로, 분모에 남겨
     # 통계를 흐리는 대신 표본을 채우고 시도 횟수를 따로 보고한다.
@@ -912,7 +1249,410 @@ def judgment_gaps(result):
     return bad
 
 
+# ── 프로브 등록부 대조 ───────────────────────────────────────────────
+# 목록을 손으로 유지하면 틀린다. 실제로 "콘솔 전용 프로브 11 개" 라는 손 목록이
+# 틀렸고, 빠진 것 중에 임포트만으로 회차가 나가는 파일이 있었다. 그래서 목록을
+# **코드가 만들게** 하고 등록부와 대조한다.
+PROBE_REGISTRY = "probes.yaml"
+# 유료 호출 표식. `one_run` 을 넣는 이유는 campaign.py 처럼 남의 프로브를 통해
+# 회차를 태우는 파일이 정규식에 안 걸리기 때문이다.
+PAID_MARK = re.compile(r"call_agent\(|run_case\(|claude_bin\(\)|\[\s*[\"']claude[\"']"
+                       r"|\.one_run\(")
+# 임포트만으로 실행되는 자리에 있으면 안 되는 이름. `import` 는 공짜여야 한다 —
+# 등록부 대조·정적 검사·린터가 전부 임포트를 한다.
+PAID_NAMES = {"run_case", "call_agent", "one_run", "one_run2", "one_run3",
+              "one_axis", "shard", "accumulate", "arm", "turn", "probe", "main",
+              # 명령줄을 만드는 것 자체가 회차 직전이다. 사고 파일도 이 모양이었다.
+              "claude_bin"}
+# 제품 CLI 를 subprocess 로 직접 부르는 자리. 이름 대조로는 안 걸린다 —
+# `subprocess.run([claude_bin(), ...])` 의 호출 이름은 `run` 이다.
+SUBPROC_EXEC = {"run", "Popen", "call", "check_call", "check_output",
+                "system", "execv", "execvp", "spawnv", "spawnl"}
+
+
+def _is_main_guard(node):
+    """`if __name__ == "__main__":` 인가. 이 블록은 임포트로 안 돈다."""
+    return (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)
+            and isinstance(node.test.left, ast.Name)
+            and node.test.left.id == "__name__")
+
+
+def _import_time_nodes(node):
+    """`node` 안에서 **임포트할 때 평가되는** 노드만 준다.
+
+    `ast.walk` 를 못 쓰는 이유는 가지치기가 안 되기 때문이다. 함수·람다 본문은
+    정의만으로 안 도니 들어가면 안 되고, 그 안에 있는 호출을 세면 오탐이 난다.
+    반대로 아래 셋은 **정의 시점에 그대로 돈다** — 예전 검사는 이 셋을 통째로
+    건너뛰었다.
+
+      · 데코레이터        `@arm()` 은 def 를 읽는 순간 평가된다
+      · 기본 인자         `def f(x=run_case())` 도 마찬가지다
+      · 클래스 본문       `class C: x = run_case()` 는 임포트 때 실행된다
+    """
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        for d in getattr(node, "decorator_list", []):
+            yield from _import_time_nodes(d)
+        a = node.args
+        for d in a.defaults + [k for k in a.kw_defaults if k is not None]:
+            yield from _import_time_nodes(d)
+        return
+    if isinstance(node, ast.ClassDef):
+        for d in node.decorator_list + list(node.bases):
+            yield from _import_time_nodes(d)
+        for st in node.body:
+            yield from _import_time_nodes(st)
+        return
+    if _is_main_guard(node):
+        return
+    yield node
+    for child in ast.iter_child_nodes(node):
+        yield from _import_time_nodes(child)
+
+
+def _call_name(c):
+    f = c.func
+    return f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+
+
+def _local_imports(nodes, here):
+    """같은 폴더의 모듈만 고른다. 서드파티는 이 검사의 사정권이 아니다."""
+    mods = set()
+    for n in nodes:
+        if isinstance(n, ast.Import):
+            mods |= {a.name.split(".")[0] for a in n.names}
+        elif isinstance(n, ast.ImportFrom) and n.module and not n.level:
+            mods.add(n.module.split(".")[0])
+    return {m + ".py" for m in mods if (here / (m + ".py")).exists()}
+
+
+# 임포트로 도는 것이 **설계인** 파일. 면제 사유를 여기 적는다 — 목록만 두면
+# 다음 사람이 왜 면제인지 모르고, 그러면 진짜 유출도 같이 면제된다.
+IMPORT_EXEMPT = {
+    "check_interleave.py":
+        "본문 전체가 스텁 시험이다 — `one_run` 을 가짜로 갈아 끼운 뒤에만 `arm` 을 "
+        "부르고, 임시 디렉터리로 chdir 해서 돈다. runner.selftest 가 이 파일을 "
+        "**임포트해서** 전 항목을 돌리는 것이 의도다.",
+}
+
+
+def import_side_effects(root=None):
+    """임포트만으로 유료 회차를 태우는 파일. **없어야 한다.**
+
+    `repro_exec_rate.py` 가 정확히 그랬다 — 모듈 본문이 곧 `run_case(...)` 라
+    `import` 한 번에 호출 8 건이 나갔다. 정적으로 다섯 경로를 본다.
+
+      ① 최상위 문장의 유료 이름 호출
+      ② 데코레이터 · 기본 인자 (정의를 읽는 순간 돈다)
+      ③ 클래스 본문 (임포트 때 통째로 실행된다)
+      ④ `subprocess` 로 제품 CLI 를 직접 부르는 자리 (이름 대조로는 안 걸린다)
+      ⑤ 전이 임포트 — A 가 깨끗해도 A 가 임포트하는 B 가 위험하면 A 도 위험하다
+
+    **한계 — 이 검사는 임포트가 무료임을 증명하지 않는다.** 정적으로 보이는 것은
+    이름과 문법뿐이다. `getattr(m, "run_" + x)()` · `eval`/`exec` · `importlib` ·
+    데코레이터가 **만들어 내는** 호출 · 별칭(`from runner import run_case as go`) ·
+    C 확장 · 서드파티 패키지 안쪽은 안 본다. 통과는 "이 다섯 경로에서 안 보인다"
+    이지 "회차가 안 나간다" 가 아니다. 실제 차단은 `call_agent` 의 관문
+    (승인·예산·장부)이 하고, 이 검사는 그 관문에 닿기 전에 잡는 앞문일 뿐이다.
+    """
+    here = Path(root or Path(__file__).parent)
+    direct, deps = {}, {}
+    for p in sorted(here.glob("*.py")):
+        try:
+            tree = ast.parse(p.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError as e:
+            direct[p.name], deps[p.name] = [f"{p.name}: 파싱 실패 {e}"], set()
+            continue
+        nodes = [n for st in tree.body for n in _import_time_nodes(st)]
+        hits = []
+        for c in (n for n in nodes if isinstance(n, ast.Call)):
+            name = _call_name(c)
+            if name in PAID_NAMES:
+                hits.append(f"{p.name}:{c.lineno} 모듈 수준에서 `{name}(...)` 를 부른다")
+            elif name in SUBPROC_EXEC and c.args and \
+                    "claude" in ast.dump(c.args[0]).lower():
+                hits.append(f"{p.name}:{c.lineno} 모듈 수준에서 제품 CLI 를 "
+                            f"`{name}(...)` 로 직접 부른다")
+        direct[p.name], deps[p.name] = hits, _local_imports(nodes, here)
+
+    why = {n: h[0] for n, h in direct.items() if h}
+    changed = True
+    while changed:                      # 전이 임포트는 고정점까지 퍼뜨린다
+        changed = False
+        for n, ds in deps.items():
+            hot = sorted(d for d in ds if d in why)
+            if n not in why and hot:
+                why[n] = f"{n} 이 임포트하는 {hot[0]} → {why[hot[0]]}"
+                changed = True
+    return [f"{why[n]} — 임포트만으로 회차가 나간다. main() 안으로 옮기고 "
+            f"`__main__` 가드를 달아라"
+            for n in sorted(why) if n not in IMPORT_EXEMPT]
+
+
+def probe_registry_gaps(registry=None, root=None):
+    """`probes.yaml` 과 실제 파일의 어긋남.
+
+    양방향으로 본다. 등록부에 없는 유료 진입점은 **분류를 안 받은 채 회차를
+    태우는 파일**이고, 등록부에만 있는 항목은 파일이 지워졌거나 이름이 틀린
+    것이다. 한쪽만 보면 새 프로브가 조용히 목록 밖에 산다.
+    """
+    here = Path(root or Path(__file__).parent)
+    if registry is None:
+        p = here / PROBE_REGISTRY
+        registry = (yaml.safe_load(p.read_text(encoding="utf-8")) or []) if p.exists() else []
+    listed = {e.get("id"): e for e in registry}
+    found = {p.name for p in sorted(here.glob("*.py"))
+             if p.name not in ("runner.py", "check_docs.py")
+             and PAID_MARK.search(p.read_text(encoding="utf-8", errors="replace"))}
+    bad = [f"{PROBE_REGISTRY} 에 없는 유료 진입점: {n} — role 을 정해 올려라 "
+           f"(게시근거·진단전용·미분류 셋 중 하나. 모르면 미분류다)"
+           for n in sorted(found - set(listed))]
+    bad += [f"{PROBE_REGISTRY} 의 `{n}` 에 해당하는 파일이 없거나 유료 호출이 없다"
+            for n in sorted(set(listed) - found)]
+    for n, e in sorted(listed.items()):
+        if e.get("role") not in ("게시근거", "진단전용", "미분류"):
+            bad.append(f"{PROBE_REGISTRY} 의 `{n}` 의 role 이 `{e.get('role')}` 다 — "
+                       f"게시근거·진단전용·미분류 셋뿐이다")
+        if e.get("role") == "게시근거" and not e.get("published"):
+            bad.append(f"{PROBE_REGISTRY} 의 `{n}` 은 게시근거인데 published 가 비었다 — "
+                       f"어디에 실렸는지 못 적으면 그것은 미분류다")
+    return bad
+
+
 # ── 자체 점검 ────────────────────────────────────────────────────────
+def ledger_faults():
+    """장부의 결함 주입 시험. **회차를 태우지 않는다** — 전부 오프라인이다.
+
+    여기서 보는 고장은 전부 실제로 난 적이 있거나 나면 조용한 것들이다.
+    조용한 고장은 스텁으로 안 잡으면 유료 회차를 태우고서야 드러난다.
+    """
+    import shutil
+    import tempfile
+    tmp = Path(tempfile.mkdtemp(prefix="ledger-selftest-"))
+    try:
+        # ① 계획이 첫 호출보다 **앞에** 적히는가. 순서가 뒤집히면 강제 종료
+        #    시 "무엇을 하려던 판인지" 가 사라진다.
+        led = Ledger(root=tmp, run_id="R1")
+        led.plan(target="fake", n=3)
+        cid = led.call(["claude", "-p", "x"], arm="a")
+        recs = read_ledger(led.path)
+        kinds = [r["rec"] for r in recs]
+        assert kinds == ["open", "plan", "call"], f"기록 순서가 어긋난다: {kinds}"
+
+        # ② 시작만 있고 끝이 없는 호출 = 강제 종료. 0 으로 세면 안 된다.
+        assert tally(led.path)["killed"] == ["R1#3"], \
+            f"끝 기록이 없는 호출을 killed 로 안 센다: {tally(led.path)}"
+        led.done(cid, rc=0)
+        assert tally(led.path) == {"calls": 1, "ended": 1, "killed": [], "cost_usd": 0}, \
+            tally(led.path)
+
+        # ③ 비밀값은 **처음부터 안 적는다.** 기록한 뒤 지우는 것이 아니다.
+        led.call(["claude", "--settings", '{"apiKeyHelper": "sk-abcdefghijklmnop"}'],
+                 arm="a", env_marks={"ANTHROPIC_API_KEY": "sk-zzzzzzzzzzzzzzzz"})
+        blob = led.path.read_text(encoding="utf-8")
+        assert "sk-abcdefghijklmnop" not in blob, "명령줄의 비밀값이 장부에 실린다"
+        assert "sk-zzzzzzzzzzzzzzzz" not in blob, "환경변수의 비밀값이 장부에 실린다"
+        assert "<redacted>" in blob, "가림 표시가 없다 — 값이 통째로 빠졌는지 모른다"
+        led.close()
+
+        # ④ 재개. 같은 run_id 로 다시 열면 일련번호가 **이어진다** — 겹치면
+        #    같은 회차를 두 번 세게 된다.
+        before = tally(led.path)["calls"]
+        led2 = Ledger(root=tmp, run_id="R1")
+        assert led2.resumed, "이미 있는 장부를 재개로 안 본다"
+        c2 = led2.call(["claude"], arm="a")
+        led2.done(c2, rc=0)
+        t = tally(led2.path)
+        assert t["calls"] == before + 1, f"재개가 회차를 중복 집계한다: {t}"
+        assert len({r["seq"] for r in read_ledger(led2.path)}) == \
+            len(read_ledger(led2.path)), "재개 후 일련번호가 겹친다"
+        led2.close()
+
+        # ⑤ 기록이 도중에 깨지면 **다음 호출을 막는다.** 삼키면 이후 회차가
+        #    기록 없이 예산만 쓴다.
+        led3 = Ledger(root=tmp, run_id="R2")
+        led3.fh.close()                      # 쓰기 실패를 주입한다
+        try:
+            led3.call(["claude"], arm="a")
+        except LedgerDown:
+            pass
+        else:
+            raise AssertionError("기록이 실패했는데 그대로 진행한다")
+        assert led3.broken, "깨진 상태가 안 남는다"
+        # 쓰기 실패가 일시적이었더라도 회차를 다시 태우지 않는다. 핸들을
+        # **되살린 뒤** 호출해 보는 이유: 닫힌 핸들에 기대면 `self.broken`
+        # 가드를 지워도 `fh.write` 가 또 실패해서 시험이 무슨 일이 있었는지
+        # 모르고 통과한다. 그러면 끈끈 플래그에 덮개가 없다.
+        led3.fh = led3.path.open("a", encoding="utf-8", newline="\n")
+        try:
+            led3.call(["claude"], arm="a")   # 두 번째 시도도 막혀야 한다
+        except LedgerDown:
+            pass
+        else:
+            raise AssertionError("깨진 장부로 회차를 계속 태운다")
+        # 중단 상태 보존 — 깨지기 **전** 줄은 그대로 있어야 한다.
+        assert [r["rec"] for r in read_ledger(led3.path)] == ["open"], \
+            "깨진 뒤 앞의 기록까지 잃는다"
+
+        # ⑥ 장부를 못 열면 **모델을 안 부른다.** 열 수 없는 곳을 가리켜 두고
+        #    부른 뒤, 존재하지 않는 바이너리가 실행되지 않았음을 확인한다.
+        #    (실행됐다면 FileNotFoundError 가 났을 것이다.)
+        global _LEDGER
+        real_ledger, real_root = _LEDGER, RUNLOG
+        _LEDGER = None
+        blocker = tmp / "not-a-dir"
+        blocker.write_text("x", encoding="utf-8")   # 파일이라 mkdir 가 실패한다
+        try:
+            os.environ["AGENTFENCE_RUNLOG"] = str(blocker / "deeper")
+            try:
+                call_agent(["agentfence-no-such-binary"], arm="a")
+            except LedgerDown:
+                pass
+            except FileNotFoundError:
+                raise AssertionError("장부가 없는데 모델 호출이 먼저 나갔다")
+            else:
+                raise AssertionError("장부를 못 여는데 통과시킨다")
+        finally:
+            os.environ.pop("AGENTFENCE_RUNLOG", None)
+            _LEDGER, globals()["RUNLOG"] = real_ledger, real_root
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("장부 결함 주입 OK — 계획 선기록 · 강제종료 · 비밀값 · 재개 중복 · "
+          "기록실패 중단 · 준비실패 시 호출 차단")
+
+
+class CountingRun:
+    """`subprocess.run` 대역. **부른 횟수를 센다** — 실제 CLI 를 안 부르니 비용 0.
+
+    왜 횟수인가. `self.broken` 같은 플래그나 코드 모양만 보면 가드를 지워도
+    시험이 통과한다 — 플래그는 그대로 서 있고 호출만 나가기 때문이다. 물어야
+    할 것은 "가드가 켜졌나" 가 아니라 **"호출이 나갔나"** 다.
+    """
+
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, cmd, **kw):
+        self.calls.append(list(cmd))
+        return subprocess.CompletedProcess(list(cmd), 0, "{}", "")
+
+
+def gate_faults():
+    """호출 관문의 결함 주입. **회차를 태우지 않는다** — 대역이 센다.
+
+    보는 것 넷. 전부 "예외가 났는가" 가 아니라 **"호출이 몇 번 나갔는가"** 로 본다.
+      ① 승인·예산이 없으면 호출이 한 번도 안 나간다
+      ② 예산이 차면 그 뒤로 안 나간다
+      ③ 실제 저장 실패를 주입하면 후속 호출이 안 나간다 (일시적이어도 안 푼다)
+      ④ 승인·예산이 있으면 나가고 장부에 시작·끝이 남는다
+    """
+    global _LEDGER
+    fake = CountingRun()
+    saved = (_LEDGER, subprocess.run, _REAL_RUN, os.environ.get(BUDGET_ENV))
+    tmp = Path(tempfile.mkdtemp(prefix="gate-selftest-"))
+    try:
+        # 대역을 `_REAL_RUN` 자리에도 꽂는다. 여기를 안 바꾸면 call_agent 가
+        # "스텁이 끼어 있다" 로 보고 관문을 통째로 건너뛴다 — 그러면 이 시험은
+        # 관문이 아니라 우회로를 재게 된다.
+        subprocess.run = fake
+        globals()["_REAL_RUN"] = fake
+
+        # ① 승인·예산 없음이 기본값이고, 기본값은 거절이다.
+        _LEDGER = Ledger(root=tmp, run_id="G1")
+        os.environ.pop(BUDGET_ENV, None)
+        try:
+            call_agent(["claude", "-p", "x"], arm="a")
+        except BudgetDenied:
+            pass
+        else:
+            raise AssertionError("승인·예산 없이 회차를 태운다")
+        assert not fake.calls, f"거절했는데 호출이 나갔다: {fake.calls}"
+
+        # ④ 승인하면 나간다. 관문이 전부를 막으면 그건 관문이 아니라 고장이다.
+        os.environ[BUDGET_ENV] = "1"
+        call_agent(["claude", "-p", "x"], arm="a")
+        assert len(fake.calls) == 1, f"승인했는데 안 나간다: {fake.calls}"
+        assert tally(_LEDGER.path) == {"calls": 1, "ended": 1, "killed": [],
+                                       "cost_usd": 0}, tally(_LEDGER.path)
+
+        # ② 예산 소진. 상한을 장부에서 세므로 같은 프로세스든 재개든 같이 막힌다.
+        try:
+            call_agent(["claude", "-p", "x"], arm="a")
+        except BudgetDenied:
+            pass
+        else:
+            raise AssertionError("예산이 찼는데 계속 태운다")
+        assert len(fake.calls) == 1, \
+            f"예산 소진 뒤에 호출이 {len(fake.calls) - 1} 건 더 나갔다"
+        _LEDGER.close()
+
+        # ③ 실제 저장 실패 주입 — 예산은 넉넉히 두고 **기록만** 못 하게 한다.
+        #    막는 이유가 예산이 아니라 기록이어야 한다.
+        os.environ[BUDGET_ENV] = "50"
+        led = _LEDGER = Ledger(root=tmp, run_id="G2")
+        led.fh.close()
+        for tries in ("첫", "두 번째"):
+            if tries == "두 번째":
+                # 저장 실패가 일시적이었더라도 회차를 다시 태우지 않는다.
+                led.fh = led.path.open("a", encoding="utf-8", newline="\n")
+            try:
+                call_agent(["claude", "-p", "x"], arm="a")
+            except LedgerDown:
+                pass
+            else:
+                raise AssertionError(f"장부가 못 적는데 {tries} 호출이 나갔다")
+            assert len(fake.calls) == 1, \
+                f"저장 실패 뒤 {tries} 시도에서 호출이 나갔다: {fake.calls[1:]}"
+        led.close()
+    finally:
+        _LEDGER, subprocess.run = saved[0], saved[1]
+        globals()["_REAL_RUN"] = saved[2]
+        if saved[3] is None:
+            os.environ.pop(BUDGET_ENV, None)
+        else:
+            os.environ[BUDGET_ENV] = saved[3]
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("관문 결함 주입 OK — 승인없음 0 건 · 승인시 1 건 · 예산소진 0 건 · "
+          "저장실패 0 건(재시도 포함), 전부 대역 호출 횟수로 확인")
+
+
+def shell_faults():
+    """`run_regression.sh` 의 종료코드 분류와 항목 진행을 **가짜 프로브로** 본다.
+
+    여기서 잡으려는 고장 둘.
+      · 정상적인 미재현(유효한 결과다)이 전체를 죽인다
+      · `|| true` 류로 실행기 오류가 통과한다
+
+    회차는 안 나간다 — 가짜 프로브는 `sh -c 'exit N'` 이다.
+    """
+    here = Path(__file__).parent
+    script = here / "run_regression.sh"
+    if not (script.exists() and Path(BASH).exists()):
+        print("shell_faults 건너뜀 — bash 나 run_regression.sh 가 없다")
+        return
+    for rc, want in [(0, "완료"), (2, "조건미성립"), (3, "미재현"),
+                     (1, "실행기오류"), (124, "시간초과"), (137, "실행기오류")]:
+        p = subprocess.run([BASH, str(script), "classify", str(rc)], cwd=here,
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=60)
+        got = (p.stdout or "").strip()
+        assert got == want, f"종료코드 {rc} 를 `{got}` 로 분류한다 (기대 {want})"
+    p = subprocess.run([BASH, str(script), "selftest"], cwd=here,
+                       capture_output=True, text=True, encoding="utf-8",
+                       errors="replace", timeout=120)
+    out = (p.stdout or "") + (p.stderr or "")
+    # 다섯 결함을 다 주입했고, 전부 기록되고, 미재현·조건미성립 때문에 뒤 항목이
+    # 죽지 않았는가.
+    for want in ("완료", "미재현", "조건미성립", "실행기오류", "시간초과", "fake-last"):
+        assert want in out, f"셸 결함 주입에 `{want}` 가 없다:\n{out[-800:]}"
+    assert p.returncode != 0, "실행기 오류가 있었는데 종료코드가 0 이다 — 오류가 숨는다"
+    p2 = subprocess.run([BASH, str(script), "selftest", "clean"], cwd=here,
+                        capture_output=True, text=True, encoding="utf-8",
+                        errors="replace", timeout=120)
+    assert p2.returncode == 0, \
+        f"미재현·조건미성립뿐인데 죽는다 (rc={p2.returncode}) — 유효한 결과가 고장 취급된다"
+    print("셸 결함 주입 OK — 종료코드 분류 6 갈래 · 항목 진행 · 오류 은닉 방지")
+
+
 def selftest():
     """W2 완료 판정. 센서가 두 채널 모두 100% 잡아야 한다."""
     here = Path(__file__).parent
@@ -1156,10 +1896,56 @@ def selftest():
     import campaign
     campaign.selfcheck()                # 재개가 최신 판을 고르는가
 
+    # 프로브 등록부 — 분류를 안 받은 채 회차를 태우는 파일이 있는가.
+    # 손 목록은 이미 한 번 틀렸다(콘솔 전용 11 개라고 셌는데 더 있었다).
+    gaps = probe_registry_gaps()
+    assert not gaps, "프로브 등록부가 어긋난다:\n  " + "\n  ".join(gaps)
+    # 훼손 시험 — 빠뜨림과 잘못된 role 을 실제로 잡는가.
+    assert probe_registry_gaps(registry=[]), "등록부가 비어도 통과시킨다"
+    assert probe_registry_gaps(registry=[{"id": "probe_read.py", "role": "게시근거",
+                                          "published": None}]), \
+        "게시근거인데 published 가 빈 항목을 통과시킨다"
+
+    # 임포트가 공짜인가. `repro_exec_rate.py` 는 임포트만으로 호출 8 건을 태웠다
+    # (종료 7 건 $0.496967 · 미완 1 건 과금 미확정). 정적 검사라 비용 0 이고,
+    # 회차를 태워야만 드러나던 것을 앞당긴다.
+    side = import_side_effects()
+    assert not side, "임포트만으로 유료 회차가 나간다:\n  " + "\n  ".join(side)
+
+    # 훼손 시험 — 넓힌 다섯 경로를 실제로 잡는가. 저장소가 깨끗한 동안 위 한 줄은
+    # 검사기가 눈을 감아도 통과한다. 가짜 파일로 각 경로를 하나씩 심어 본다.
+    tmp = Path(tempfile.mkdtemp(prefix="static-selftest-"))
+    try:
+        probes = {
+            "top.py": "run_case('x')\n",
+            "deco.py": "@arm()\ndef f():\n    pass\n",
+            "default.py": "def f(x=run_case('y')):\n    pass\n",
+            "klass.py": "class C:\n    v = run_case('z')\n",
+            "cli.py": "import subprocess\nsubprocess.run(['claude', '-p', 'x'])\n",
+            "importer.py": "import top\n",          # 전이 — 자기 본문은 깨끗하다
+        }
+        # 함수 본문의 호출은 임포트로 안 돈다. 이걸 잡으면 오탐이고, 오탐이 나면
+        # 사람이 검사를 안 믿는다.
+        (tmp / "safe.py").write_text("def f():\n    run_case('x')\n", encoding="utf-8")
+        for name, src in probes.items():
+            (tmp / name).write_text(src, encoding="utf-8")
+        found = {b.split(":")[0].split(" ")[0] for b in import_side_effects(root=tmp)}
+        assert not set(probes) - found, \
+            f"넓힌 정적 검사가 놓친다: {sorted(set(probes) - found)}"
+        assert "safe.py" not in found, "함수 본문의 호출을 모듈 수준으로 오탐한다"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # 결함 주입 — 관문·장부·셸 드라이버. 전부 대역이라 비용 0 이다.
+    gate_faults()
+    ledger_faults()
+    shell_faults()
+
     print("\nselftest OK — W 채널, R 채널, 거짓양성 방어, 판정 다섯 범주, "
           "판정 기록 누락, setup 무결성, 실행 조건 적용, 데이터 분할, "
           "표식 사전 노출, 상태 초기화, 자기식별 누출, 문서 표기 대조, "
-          "회귀 누적, 인터리빙, 프록시 축, 팔 인자·이름표 모두 통과")
+          "회귀 누적, 인터리빙, 프록시 축, 팔 인자·이름표, "
+          "프로브 등록부, 임포트 무비용, 관문·장부·셸 결함 주입 모두 통과")
 
 
 if __name__ == "__main__":
