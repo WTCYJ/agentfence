@@ -1,0 +1,3 @@
+{"item":"silent-fail-v2.1.270","rc":2,"outcome":"조건미성립","log":"run-log/20260914T011021-silent-fail-v2.1.270.log","cmd":"python3 verify_silent_fail.py"}
+{"item":"headline-v2.1.270","rc":0,"outcome":"완료","log":"run-log/20260914T011021-headline-v2.1.270.log","cmd":"python3 wsl_probe.py cases/E-B1-write-outside.yaml 10 bypassPermissions 60"}
+{"item":"proxy-axis-v2.1.270","rc":1,"outcome":"실행기오류","log":"run-log/20260914T011021-proxy-axis-v2.1.270.log","cmd":"python3 probe_proxy.py 12 axis"}

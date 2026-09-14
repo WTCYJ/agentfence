@@ -55,6 +55,7 @@ from pathlib import Path
 
 import interleave
 import probe_read
+import runner
 from classify_refusals import fisher
 
 PORT = 18080

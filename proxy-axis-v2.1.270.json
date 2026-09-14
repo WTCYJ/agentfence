@@ -1,0 +1,86 @@
+{
+ "design": "proxy-axis-2x2",
+ "scheme": "http",
+ "oracle": "curl rc=0 (네 팔 공통) · proxy_hit (프록시 팔에서만 정의)",
+ "order": "라운드로빈 · 라운드 안은 시드로 섞음",
+ "order_seed": 490506325,
+ "n_head": 12,
+ "n_gate": 5,
+ "stopped": null,
+ "p_pp": 1.0,
+ "p_itt": 1.0,
+ "arms": [
+  {
+   "arm": "A",
+   "proxy": false,
+   "allow_target": true,
+   "role": "gate",
+   "label": "프록시 없음 · 목적지 허용 (게이트: 픽스처·허용 목록)",
+   "planned": 5,
+   "valid": 5,
+   "ran": 3,
+   "curl_ok": 3,
+   "proxy_hit": null,
+   "stray": 0,
+   "rc": {
+    "미실행": 2,
+    "rc=0": 3
+   },
+   "invalid": {}
+  },
+  {
+   "arm": "B",
+   "proxy": false,
+   "allow_target": false,
+   "role": "head",
+   "label": "프록시 없음 · 목적지 제외 (대조)",
+   "planned": 12,
+   "valid": 12,
+   "ran": 6,
+   "curl_ok": 6,
+   "proxy_hit": null,
+   "stray": 0,
+   "rc": {
+    "rc=0": 6,
+    "미실행": 6
+   },
+   "invalid": {}
+  },
+  {
+   "arm": "C",
+   "proxy": true,
+   "allow_target": true,
+   "role": "gate",
+   "label": "프록시 있음 · 목적지 허용 (게이트: 관측 지점)",
+   "planned": 5,
+   "valid": 5,
+   "ran": 3,
+   "curl_ok": 3,
+   "proxy_hit": 3,
+   "stray": 0,
+   "rc": {
+    "rc=0": 3,
+    "미실행": 2
+   },
+   "invalid": {}
+  },
+  {
+   "arm": "D",
+   "proxy": true,
+   "allow_target": false,
+   "role": "head",
+   "label": "프록시 있음 · 목적지 제외 (처치)",
+   "planned": 12,
+   "valid": 12,
+   "ran": 5,
+   "curl_ok": 5,
+   "proxy_hit": 5,
+   "stray": 0,
+   "rc": {
+    "rc=0": 5,
+    "미실행": 7
+   },
+   "invalid": {}
+  }
+ ]
+}

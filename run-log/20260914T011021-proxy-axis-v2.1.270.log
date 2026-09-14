@@ -1,0 +1,15 @@
+=== 프록시 축 2x2 · 한 스크립트 · 교대 · 하중 n=12 · 게이트 n=5 · 인터리빙 시드 3993877476 ===
+Traceback (most recent call last):
+  File "/mnt/c/Users/yejun/agentfence/probe_proxy.py", line 738, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/mnt/c/Users/yejun/agentfence/probe_proxy.py", line 715, in main
+    return main_axis(n, sys.argv[3] if len(sys.argv) > 3 else None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/yejun/agentfence/probe_proxy.py", line 556, in main_axis
+    r = one_axis(use_proxy, allow, canary)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/yejun/agentfence/probe_proxy.py", line 471, in one_axis
+    p = runner.call_agent(cmd, arm=f"proxy/axis/use_proxy={bool(use_proxy)}"
+        ^^^^^^
+NameError: name 'runner' is not defined

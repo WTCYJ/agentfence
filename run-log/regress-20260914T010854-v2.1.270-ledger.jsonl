@@ -1,0 +1,1 @@
+{"run_id": "regress-20260914T010854-v2.1.270", "seq": 1, "t": "2026-09-14T01:08:54Z", "rec": "open", "resumed": false, "argv": ["preflight.py"], "cwd": "/mnt/c/Users/yejun/agentfence", "claude_bin": "/mnt/c/Users/yejun/agentfence/.versions/2.1.270/node_modules/.bin/claude", "machine": "v2.1.270", "tag": "v2.1.270"}
