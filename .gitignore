@@ -14,3 +14,7 @@ graphify-out/cache/
 # (AIShellJack=Apache-2.0/CC BY 4.0 충돌, LivePI=CC BY 4.0, RedTeamCUA=Apache-2.0).
 # 재취득 방법은 dataset/survey/README.md 에 있다. dataset/survey/ 는 우리가 쓴 것이라 커밋한다.
 dataset/raw/
+
+# 측정 중에만 사는 락. 223bd28 이 실행 도중에 `git add -A` 를 하면서 이것까지
+# 커밋했다 — 락이 저장소에 들어가면 다른 체크아웃에서 그 칸이 "도는 중" 으로 보인다.
+.lock-*

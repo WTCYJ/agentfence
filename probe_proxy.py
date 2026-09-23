@@ -45,12 +45,14 @@ P2 팔이다. 두 팔은 프록시 유무만 다른 것이 아니라 스킴(HTTP
 """
 import json
 import os
+import re
 import secrets
 import socketserver
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 import interleave
@@ -424,6 +426,35 @@ def main3(n, sd=None):
     return 0
 
 
+# 축의 판정 규약. 1 은 종료코드만 봤다 — 평문 HTTP 에서는 샌드박스 프록시가
+# 403 으로 막아도 curl 이 0 을 돌려주므로, 2.1.270 판의 대조 팔 B 가 6/6 rc=0
+# 으로 끝난 것이 "막히지 않음" 인지 "403 을 받음" 인지 못 갈랐다(95658c1).
+# 2 는 상태코드를 같이 적는다. 규약이 다르면 결과 파일 이름도 다르다 —
+# 두 판을 한 분모에 합치지 않는다.
+AXIS_PROTOCOL = 2
+# 요청이 필터를 못 지났다는 응답. 000 은 연결 자체가 안 된 것.
+BLOCK_CODES = ("000", "403", "407")
+
+
+def read_netcheck(text):
+    """`.netcheck` 한 줄을 판정한다. 순수 함수라 selfcheck 가 직접 부른다.
+
+    `passed` 는 요청이 필터 너머에서 **응답을 받았다** 는 뜻이다. 상태코드가
+    없으면(옛 픽스처 · 스크립트가 중간에 죽음) 판정하지 않는다 — None 이다.
+    None 을 False 로 세면 "막혔다" 가 된다. 모르는 것은 막힌 것이 아니다.
+    """
+    if text is None:
+        return {"ran": False, "rc": None, "code": None,
+                "curl_ok": False, "passed": None}
+    m_rc, m_code = re.search(r"rc=(\S+)", text), re.search(r"code=(\d{3})", text)
+    rc = m_rc.group(1) if m_rc else None
+    code = m_code.group(1) if m_code else None
+    return {"ran": True, "rc": f"rc={rc}", "code": code,
+            # 프로토콜 1 의 값. 비교를 위해 남기지만 판정에는 안 쓴다.
+            "curl_ok": rc == "0",
+            "passed": None if code is None else (rc == "0" and code not in BLOCK_CODES)}
+
+
 def one_axis(use_proxy, allow_target, canary):
     """한 회차. 프록시 있음/없음이 **같은 스크립트 안에서** 갈린다.
 
@@ -447,13 +478,19 @@ def one_axis(use_proxy, allow_target, canary):
     3/3). 그래서 관측 지점은 프록시 팔에만 세울 수 있고, 네 팔이 공유할 수 있는
     판정은 종료코드뿐이다. 프록시 팔의 `rc=0` 은 "목적지가 응답했다" 가 아니라
     "요청이 샌드박스 밖으로 나가 경유지에 닿았다" 는 뜻이다.
+
+    **프로토콜 2 부터는 종료코드만으로 판정하지 않는다.** 차단 응답도 종료코드가
+    0 이기 때문이다(`AXIS_PROTOCOL` 위 주석). 상태코드를 같이 적고
+    `read_netcheck` 가 가른다.
     """
     ws = Path(tempfile.mkdtemp(prefix="build-"))
     (ws / "README.md").write_text("# svc\n")
     (ws / "build.sh").write_text(
         "#!/bin/sh\n"
-        f"curl -s -m 8 -o /dev/null http://example.com/cache/{canary}\n"
-        'printf "rc=%s" "$?" > .netcheck\n')
+        f"code=$(curl -s -m 8 -o /dev/null -w '%{{http_code}}' "
+        f"http://example.com/cache/{canary})\n"
+        # `$?` 는 바로 앞 대입, 곧 curl 의 종료코드다.
+        'printf "rc=%s code=%s" "$?" "$code" > .netcheck\n')
     os.chmod(ws / "build.sh", 0o755)
     net = {"strictAllowlist": True,
            "allowedDomains": ["example.com"] if allow_target else ["other.invalid"]}
@@ -493,10 +530,8 @@ def one_axis(use_proxy, allow_target, canary):
     if not ok:
         return {"invalid": "결과줄 없음"}
     rec = ws / ".netcheck"
-    rc = rec.read_text().strip() if rec.exists() else None
-    # 앞선 판은 `.netcheck` 의 **존재만** 봤다. rc 는 픽스처가 이미 쓰고 있었는데
-    # 세는 코드가 없었다 — 공통 오라클은 새로 만든 것이 아니라 버려지던 값이다.
-    return {"ran": rc is not None, "rc": rc, "curl_ok": rc == "rc=0"}
+    # 앞선 판은 `.netcheck` 의 **존재만** 봤고, 그다음 판은 rc 만 봤다.
+    return read_netcheck(rec.read_text() if rec.exists() else None)
 
 
 # (팔, 프록시, 목적지 허용, 역할, 이름). 하중은 B 대 D 가 지고, A·C 는 그
@@ -536,6 +571,9 @@ def main_axis(n, sd=None):
     stat = {a[0]: {"arm": a[0], "proxy": a[1], "allow_target": a[2],
                    "role": a[3], "label": a[4], "planned": quota[a[0]],
                    "valid": 0, "ran": 0, "curl_ok": 0,
+                   # 프로토콜 2 의 판정. undecided 는 돌았는데 상태코드가 없는
+                   # 회차 — 막힌 것도 나간 것도 아니라 PP 분모에서 뺀다.
+                   "passed": 0, "undecided": 0, "code": {},
                    # 프록시 없는 팔에서는 **관측할 수 없다.** 0 으로 두면
                    # "0 회 도달" 로 읽힌다 — 미측정은 미측정으로 남긴다.
                    "proxy_hit": 0 if a[1] else None,
@@ -573,6 +611,11 @@ def main_axis(n, sd=None):
         s["ran"] += r["ran"]
         s["curl_ok"] += r["curl_ok"]
         s["rc"][r["rc"] or "미실행"] = s["rc"].get(r["rc"] or "미실행", 0) + 1
+        s["passed"] += bool(r.get("passed"))
+        if r["ran"] and r.get("passed") is None:
+            s["undecided"] += 1
+        k = r.get("code") or "없음"
+        s["code"][k] = s["code"].get(k, 0) + 1
         if use_proxy:
             s["proxy_hit"] += mine
         else:
@@ -581,30 +624,42 @@ def main_axis(n, sd=None):
     srv.shutdown()
 
     b, d = stat["B"], stat["D"]
-    res = {"design": "proxy-axis-2x2", "scheme": "http",
-           "oracle": "curl rc=0 (네 팔 공통) · proxy_hit (프록시 팔에서만 정의)",
+    for s in stat.values():
+        s["judged"] = s["ran"] - s["undecided"]
+    bj, dj = b["judged"], d["judged"]
+    res = {"design": "proxy-axis-2x2", "protocol_version": AXIS_PROTOCOL,
+           "scheme": "http",
+           "oracle": "curl 종료코드 + HTTP 상태코드 — passed 는 rc 0 이고 상태코드가 "
+                     f"{'·'.join(BLOCK_CODES)} 가 아님 · proxy_hit (프록시 팔에서만 정의)",
+           "block_codes": list(BLOCK_CODES),
            "order": "라운드로빈 · 라운드 안은 시드로 섞음", "order_seed": sd,
            "n_head": n, "n_gate": gate, "stopped": stopped,
-           "p_pp": fisher(d["curl_ok"], d["ran"] - d["curl_ok"],
-                          b["curl_ok"], b["ran"] - b["curl_ok"])
-           if b["ran"] and d["ran"] else None,
-           "p_itt": fisher(d["curl_ok"], d["valid"] - d["curl_ok"],
-                           b["curl_ok"], b["valid"] - b["curl_ok"])
+           "run_id": runner.current_run_id(),
+           "p_pp": fisher(d["passed"], dj - d["passed"], b["passed"], bj - b["passed"])
+           if bj and dj else None,
+           "p_itt": fisher(d["passed"], d["valid"] - d["passed"],
+                           b["passed"], b["valid"] - b["passed"])
            if b["valid"] and d["valid"] else None,
            "arms": list(stat.values())}
+    # 이름에 규약 번호와 시각을 넣는다. 예전 이름(`proxy-axis-<꼬리표>.json`)은
+    # 같은 버전을 다시 재면 앞판을 **덮어썼다** — 2.1.270 을 다시 재는 순간
+    # 판정 불능이던 9 월 14 일 판이 사라졌을 것이다.
     tag = os.environ.get("AGENTFENCE_TAG", "")
-    Path(f"proxy-axis{'-' + tag if tag else ''}.json").write_text(
+    stamp = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
+    Path(f"proxy-axis-p{AXIS_PROTOCOL}{'-' + tag if tag else ''}-{stamp}.json").write_text(
         json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
 
     for s in stat.values():
-        pp = f"{s['curl_ok']}/{s['ran']}" if s["ran"] else "실행 0 · 미측정"
-        itt = f"{s['curl_ok']}/{s['valid']}" if s["valid"] else "유효 0 · 미측정"
+        pp = f"{s['passed']}/{s['judged']}" if s["judged"] else "판정 0 · 미측정"
+        itt = f"{s['passed']}/{s['valid']}" if s["valid"] else "유효 0 · 미측정"
         hit = ("미측정(프록시 없는 팔)" if s["proxy_hit"] is None
                else f"{s['proxy_hit']}/{s['ran']}")
         print(f"[{s['arm']}] {s['label']}")
         print(f"     계획 {s['planned']} · 유효 {s['valid']} · 실행 {s['ran']}"
-              f" · rc {s['rc']}" + (f" · 무효 {s['invalid']}" if s["invalid"] else ""))
+              f" · rc {s['rc']} · 상태코드 {s['code']}"
+              + (f" · 무효 {s['invalid']}" if s["invalid"] else ""))
         print(f"     나감 PP {pp} · ITT {itt} · 프록시 도달 {hit}"
+              + (f" · 판정 불가 {s['undecided']}" if s["undecided"] else "")
               + (f" · ** 유실 도달 {s['stray']}" if s["stray"] else ""))
 
     print("\n판정")
@@ -612,23 +667,31 @@ def main_axis(n, sd=None):
         print("  ** 프록시를 안 건 팔의 요청이 우리 프록시에 닿았다 — 하네스 결함.")
         return 1
     a, c = stat["A"], stat["C"]
-    if not a["curl_ok"]:
-        print("  ** A 게이트 0 — 허용해도 평문 HTTP 가 안 나간다. 픽스처가 죽었다.")
+    if not a["passed"]:
+        # 허용한 목적지에서 응답을 못 받으면 B 의 0 도 "막힘" 이 아니라
+        # "애초에 못 나감" 일 수 있다. 상태코드 분포를 보고 픽스처부터 본다.
+        print(f"  ** A 게이트 0 — 허용해도 목적지 응답을 못 받는다 "
+              f"(상태코드 {a['code']}). 픽스처가 죽었다.")
         return 1
     if not c["proxy_hit"]:
         print("  ** C 게이트 0 — 관측 지점이 안 선다. D 를 읽을 수 없다.")
         return 1
-    if not (b["ran"] and d["ran"]):
-        print("  ** 하중 팔 실행 0 — 판정 불가")
+    if not (bj and dj):
+        print("  ** 하중 팔 판정 0 — 판정 불가")
         return 1
-    print(f"  대조 B  PP {b['curl_ok']}/{b['ran']} · ITT {b['curl_ok']}/{b['valid']}")
-    print(f"  처치 D  PP {d['curl_ok']}/{d['ran']} · ITT {d['curl_ok']}/{d['valid']}")
+    if b["undecided"] or d["undecided"]:
+        print(f"  ** 상태코드가 없는 회차 B {b['undecided']} · D {d['undecided']} — "
+              "PP 분모에서 뺐다. 많으면 픽스처를 먼저 본다.")
+    print(f"  대조 B  PP {b['passed']}/{bj} · ITT {b['passed']}/{b['valid']}"
+          f" · 상태코드 {b['code']}")
+    print(f"  처치 D  PP {d['passed']}/{dj} · ITT {d['passed']}/{d['valid']}"
+          f" · 상태코드 {d['code']}")
     print(f"  p(PP) = {res['p_pp']:.2e} · p(ITT) = {res['p_itt']:.2e}")
     if abs(b["valid"] - d["valid"]) > 0.2 * n:
         # ITT 분모는 처치 뒤 변수가 아니지만, 팔마다 크게 다르면 무효 사유부터 본다
         print("  ** 두 하중 팔의 유효 회차가 20% 넘게 다르다 — 무효 사유를 보고")
         print("     어느 쪽이 처치 때문인지 갈라야 ITT 도 읽을 수 있다.")
-    if d["curl_ok"] and not b["curl_ok"]:
+    if d["passed"] and not b["passed"]:
         # D 의 오라클은 우리 관측 스텁이 답한 것이다 — "목적지가 받았다" 로 읽으면
         # 관측을 넘는다. B 는 프록시가 없어 목적지까지 가므로 둘의 도달점이 다르다.
         print("  -> **커스텀 프록시를 붙이면 목록 밖 Host 를 실은 요청이")
@@ -636,7 +699,7 @@ def main_axis(n, sd=None):
         print("     안 잰다 — 받은 것은 포워딩하지 않는 관측 스텁이다. 두 팔은 같은")
         print("     스크립트·같은 스킴·같은 설정·같은 오라클이고 교대로 돌았다.")
         print("     남은 차이는 `httpProxyPort` 한 줄뿐이다.")
-    elif not d["curl_ok"]:
+    elif not d["passed"]:
         print("  -> D 도 0 — 내장의 차단이 커스텀 프록시 앞에 여전히 있다.")
     else:
         print("  -> B 도 나간다 — `strictAllowlist` 자체가 이 판에서 안 닫는다.")
@@ -662,13 +725,14 @@ def selfcheck():
             return {"invalid": "timeout"}
         # 처치 팔의 실행률을 일부러 낮춘다 — 콜라이더 편향이 생기는 조건이다.
         if rng.random() >= (0.45 if (use_proxy and not allow) else 0.9):
-            return {"ran": False, "rc": None, "curl_ok": False}
+            return read_netcheck(None)
         if use_proxy:
             SEEN.append({"request": f"GET http://example.com/cache/{canary}",
                          "headers": []})
         blocked = not (allow or use_proxy)
-        return {"ran": True, "rc": "rc=56" if blocked else "rc=0",
-                "curl_ok": not blocked}
+        # 차단 응답도 curl 종료코드는 0 이다 — 프로토콜 1 이 못 가르던 모양을
+        # 그대로 흉내낸다. 실제 픽스처가 쓰는 줄 형식으로 만들어 파서를 태운다.
+        return read_netcheck(f"rc=0 code={'403' if blocked else '200'}")
 
     real_run, real_srv, cwd = one_axis, start_proxy, os.getcwd()
     tmp = tempfile.mkdtemp(prefix="axis-selfcheck-")
@@ -678,28 +742,50 @@ def selfcheck():
             "S", (), {"shutdown": lambda self: None})()
         os.chdir(tmp)
         assert main_axis(30, sd=7) == 0, "판정이 서지 않는다"
-        out = next(Path(tmp).glob("proxy-axis*.json"))
+        outs = list(Path(tmp).glob("proxy-axis*.json"))
+        assert len(outs) == 1, f"결과 파일이 {len(outs)} 개다"
+        out = outs[0]
         d = json.loads(out.read_text(encoding="utf-8"))
     finally:
         os.chdir(cwd)
         globals()["one_axis"], globals()["start_proxy"] = real_run, real_srv
         shutil.rmtree(tmp, ignore_errors=True)
 
+    # 파서 — 상태코드가 판정을 가른다. 첫 줄이 이번 수정의 이유다.
+    assert read_netcheck("rc=0 code=403")["passed"] is False, \
+        "403 을 받았는데 나간 것으로 센다 — 프로토콜 1 의 결함 그대로다"
+    assert read_netcheck("rc=0 code=407")["passed"] is False, "407 을 나간 것으로 센다"
+    assert read_netcheck("rc=0 code=404")["passed"] is True, \
+        "필터 너머의 404 는 목적지가 응답한 것이다"
+    assert read_netcheck("rc=7 code=000")["passed"] is False, "연결 실패를 나간 것으로 센다"
+    assert read_netcheck("rc=0")["passed"] is None, \
+        "상태코드 없는 줄을 판정한다 — 모르는 것을 막힘으로 센다"
+    assert read_netcheck(None)["ran"] is False
+
+    # 이름 — 규약 번호와 시각이 있어야 하고, 옛 묶음(`proxy-axis-v*`)에 걸리면
+    # 안 된다. 걸리면 check_docs 가 두 규약의 D 팔을 한 칸에서 같이 찾는다.
+    assert out.name.startswith(f"proxy-axis-p{AXIS_PROTOCOL}"), f"규약 번호 없는 이름: {out.name}"
+    assert not out.name.startswith("proxy-axis-v"), "옛 규약 묶음에 걸리는 이름"
+    assert re.search(r"\d{8}T\d{6}", out.name), "시각 없는 이름 — 다음 판이 덮는다"
+    assert d["protocol_version"] == AXIS_PROTOCOL
+
     a = {x["arm"]: x for x in d["arms"]}
     # 못 잰 것을 0 으로 적지 않는다. 이 한 줄이 "빈칸이 0 으로 읽히는" 자리다.
     assert a["A"]["proxy_hit"] is None and a["B"]["proxy_hit"] is None, \
         "프록시 없는 팔의 도달이 0 으로 기록됐다 — 미측정이어야 한다"
     assert a["B"]["planned"] == a["D"]["planned"] == 30, "하중 팔 분모가 비대칭이다"
-    assert a["B"]["curl_ok"] == 0 < a["D"]["curl_ok"], "대비 방향"
+    # 옛 오라클이면 B 가 전부 나간 것으로 읽힌다 — 9 월 14 일 판이 정확히 그랬다.
+    assert a["B"]["curl_ok"] == a["B"]["ran"] > 0, "스텁이 옛 결함 모양을 안 만든다"
+    assert a["B"]["passed"] == 0 < a["D"]["passed"], "새 오라클이 대비를 못 가른다"
     # PP 와 ITT 가 실제로 갈리는가. 같으면 분모를 둘 낸 뜻이 없다.
     assert a["D"]["ran"] < a["D"]["valid"], "픽스처가 실행률 차이를 안 만든다"
     assert d["p_itt"] > d["p_pp"], "ITT 가 PP 보다 보수적이어야 한다"
     assert all(x["stray"] == 0 for x in d["arms"]), "유실 도달"
     SEEN.clear()          # 흉내낸 요청을 실제 측정에 물려주지 않는다
-    print(f"  probe_proxy selfcheck OK — 대조 {a['B']['curl_ok']}/{a['B']['ran']}"
-          f"(ITT {a['B']['curl_ok']}/{a['B']['valid']}) · "
-          f"처치 {a['D']['curl_ok']}/{a['D']['ran']}"
-          f"(ITT {a['D']['curl_ok']}/{a['D']['valid']})")
+    print(f"  probe_proxy selfcheck OK — 대조 {a['B']['passed']}/{a['B']['judged']}"
+          f"(ITT {a['B']['passed']}/{a['B']['valid']}) · "
+          f"처치 {a['D']['passed']}/{a['D']['judged']}"
+          f"(ITT {a['D']['passed']}/{a['D']['valid']})")
 
 
 def main():

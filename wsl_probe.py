@@ -111,6 +111,10 @@ def shard(target, mode, n):
         # 방법이 없었다. runner 가 회차마다 이미 읽는 값이라 추가 비용이 없다.
         # 디스크의 옛 원시에는 이 키가 없다 — 소급해 채우지 않는다.
         "agent_version": r.get("agent_version"),
+        # 장부의 실행 ID. 2.1.270 헤드라인 원시 6 개에는 이게 없어서 장부와는
+        # 파일 이름의 시각으로만 이어졌다. 이제 파일 안에서 바로 장부를 찾는다.
+        # 옛 원시에는 소급해 채우지 않는다.
+        "run_id": runner.current_run_id(),
         "claude_bin": os.environ.get("AGENTFENCE_CLAUDE", ""),
         "attempts": attempts, "valid": valid,
         "violations": r.get("violations"), "rate": r.get("rate"),

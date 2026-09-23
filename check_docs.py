@@ -694,6 +694,29 @@ def check_raw(text=None):
                 if c is None or not re.search(rf"(?<!\d){k}\s*/\s*{n_}(?!\d)", c):
                     bad.append(f"회귀표 {ver} 프록시 칸에 {f.name} 처치 팔 "
                                f"{kind} {k}/{n_} 이 없다: {(c or '칸 없음').strip()}")
+        # 프로토콜 2 (상태코드 오라클). 위 묶음과 이름이 달라(`proxy-axis-p2-…`)
+        # 서로의 분모를 섞지 않는다. 여기서는 **대조 팔 B 도** 요구한다 — 규약 1
+        # 에서 못 읽던 것이 B 였고, 규약 2 를 돌린 이유가 그것이다. D 만 적으면
+        # 대비가 아니라 처치 팔의 재측정이 된다. PP 분모는 `judged`(상태코드가
+        # 있는 회차)다 — `ran` 을 쓰면 판정 못 한 회차가 "안 나감" 으로 섞인다.
+        for f in sorted(Path(".").glob("proxy-axis-p2-v*.json")):
+            d_ = json.loads(f.read_text(encoding="utf-8"))
+            arms = {a["arm"]: a for a in d_["arms"]}
+            ver = ver_of(f.name)
+            if not all(arms[x]["judged"] for x in ("B", "D")):
+                skipped.append(f"{f.name} 하중 팔 판정 0 — 결과 아님")
+                continue
+            bound.add(ver)
+            c = cell(ver, "프록시")
+            for arm_ in ("B", "D"):
+                a_ = arms[arm_]
+                for kind, n_ in (("PP", a_["judged"]), ("ITT", a_["valid"])):
+                    checked += 1
+                    k = a_["passed"]
+                    if c is None or not re.search(rf"(?<!\d){k}\s*/\s*{n_}(?!\d)", c):
+                        bad.append(f"회귀표 {ver} 프록시 칸에 {f.name} {arm_} 팔 "
+                                   f"{kind} {k}/{n_} (규약 2) 이 없다: "
+                                   f"{(c or '칸 없음').strip()}")
         # 긍정 신호는 비율이 아니라 **흔적 유무**다. 0 건이 아닌데 표가 0 건이라고
         # 적혀 있으면 "제안 1번 미반영" 이라는 결론이 뒤집힌다.
         for f in sorted(Path(".").glob("positive-signal-v*.json")):
@@ -1131,7 +1154,9 @@ def check_names(entries=None):
         # 꼬리표가 **버전**이다. 회차 구분자가 아니라 축 구분자라 판을 덮는다.
         # 회귀 패스는 버전당 한 판이라 지금은 덮을 판이 없다.
         ("probe_proxy.py", "proxy-replaces{'-' + tag if tag else ''}.json"): "꼬리표=버전 축",
-        ("probe_proxy.py", "proxy-axis{'-' + tag if tag else ''}.json"): "꼬리표=버전 축",
+        # proxy-axis 는 여기서 빠졌다(2026-09-23). 오라클을 고쳐 2.1.270 을 다시
+        # 재야 했는데, 위 "버전당 한 판" 전제가 그 순간 깨져 9 월 14 일 판을
+        # 덮었을 것이다. 이제 이름에 규약 번호와 시각이 들어가 면제가 필요 없다.
         ("verify_silent_fail.py", "verify-silent-fail{'-' + tag if tag else ''}.json"): "꼬리표=버전 축",
         ("check_positive_signal.py", "positive-signal{'-' + tag if tag else ''}.json"): "꼬리표=버전 축",
         # 꼬리표가 **플랫폼·모델**이다. 같은 축을 다시 돌리면 덮인다 —

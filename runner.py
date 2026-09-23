@@ -471,6 +471,17 @@ def ledger():
     return _LEDGER
 
 
+def current_run_id():
+    """열린 장부의 실행 ID. 장부가 안 열렸으면 None — **열지 않는다.**
+
+    결과 파일에 실행 ID 를 싣는 쪽이 `ledger().run_id` 를 부르면, 유료 호출이
+    한 번도 없던 판(selfcheck 스텁·관문 거절)에서도 장부 파일이 새로 생긴다.
+    `open` 한 줄짜리 빈 장부가 그렇게 쌓인다. None 이면 "이 판은 유료 호출이
+    없었다" 는 뜻이고, 그 자체로 참이다.
+    """
+    return _LEDGER.run_id if _LEDGER is not None else None
+
+
 class BudgetDenied(RuntimeError):
     """승인·예산 없이 유료 회차를 부르려 했다. **부르지 않는다.**
 
@@ -1335,6 +1346,56 @@ IMPORT_EXEMPT = {
 }
 
 
+def unbound_modules(root=None):
+    """저장소 모듈을 `이름.속성` 으로 쓰는데 그 이름을 **아무 데서도** 안 묶은 파일.
+
+    223bd28 이 과금 관문을 넣으며 `probe_proxy.py` 의 호출 네 곳을
+    `runner.call_agent` 로 바꿨는데 `import runner` 가 빠졌다. 첫 호출에서
+    NameError 로 죽어 2026-09-14 01:10 판이 통째로 날아갔다. selftest 는 그
+    호출 경로를 안 타서 통과했고, `import_side_effects` 는 유료 호출이 **새는지**
+    를 보지 이름이 **묶였는지** 는 안 본다.
+
+    한계 — 파일 안 어디서든 import 하면 묶인 것으로 친다(함수 안 import 도).
+    그러니 "그 줄에 닿을 때 이름이 살아 있는가" 는 증명하지 않는다. 잡는 것은
+    이번에 난 모양, 즉 **파일 전체에 import 가 아예 없는** 경우다. 맨 이름
+    호출(`call_agent(...)` 을 import 없이)도 안 본다.
+    """
+    import ast
+    root = Path(root or Path(__file__).parent)
+    local = {p.stem for p in root.glob("*.py")}
+    bad = []
+    for p in sorted(root.glob("*.py")):
+        try:
+            tree = ast.parse(p.read_text(encoding="utf-8"))
+        except SyntaxError as e:
+            # 구문 오류를 "이름 안 묶임" 으로 세면 안 된다 — 다른 고장이다.
+            bad.append(f"{p.name}: 파싱 실패 ({e.msg}) — 이름 검사를 못 했다")
+            continue
+        bound = set()
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Import):
+                bound |= {(a.asname or a.name).split(".")[0] for a in n.names}
+            elif isinstance(n, ast.ImportFrom):
+                bound |= {a.asname or a.name for a in n.names}
+            elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                bound.add(n.name)
+                bound |= {a.arg for a in n.args.args} if hasattr(n, "args") else set()
+            elif isinstance(n, ast.Assign):
+                bound |= {t.id for t in n.targets if isinstance(t, ast.Name)}
+            elif isinstance(n, (ast.For, ast.comprehension)) and isinstance(n.target, ast.Name):
+                bound.add(n.target.id)
+        used = {}
+        for n in ast.walk(tree):
+            if (isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
+                    and n.value.id in local and n.value.id != p.stem):
+                used.setdefault(n.value.id, n.lineno)
+        for name, line in sorted(used.items()):
+            if name not in bound:
+                bad.append(f"{p.name}:{line} `{name}.` 을 쓰는데 `import {name}` 이 "
+                           f"파일 어디에도 없다 — 그 줄에 닿는 순간 NameError 다")
+    return bad
+
+
 def import_side_effects(root=None):
     """임포트만으로 유료 회차를 태우는 파일. **없어야 한다.**
 
@@ -1936,6 +1997,31 @@ def selftest():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+    # 이름이 묶였는가 — 223bd28 의 probe_proxy.py 가 `import runner` 없이
+    # `runner.call_agent` 를 불러 첫 호출에서 죽었다. 정적이라 비용 0.
+    loose = unbound_modules()
+    assert not loose, "import 없이 쓰는 저장소 모듈:\n  " + "\n  ".join(loose)
+    tmp = Path(tempfile.mkdtemp(prefix="bind-selftest-"))
+    try:
+        (tmp / "runner.py").write_text("def call_agent():\n    pass\n", encoding="utf-8")
+        # 이번에 난 모양 그대로 — 함수 안에서 쓰고 import 는 아무 데도 없다.
+        (tmp / "broken.py").write_text(
+            "def f():\n    return runner.call_agent()\n", encoding="utf-8")
+        (tmp / "fine.py").write_text(
+            "import runner\ndef f():\n    return runner.call_agent()\n", encoding="utf-8")
+        (tmp / "aliased.py").write_text(
+            "import runner as r\ndef f():\n    return r.call_agent()\n", encoding="utf-8")
+        # 구문 오류는 **다른 고장**으로 보고해야 한다. 이름 검사를 통과시키면 안 된다.
+        (tmp / "garbled.py").write_text("def f(:\n", encoding="utf-8")
+        got = unbound_modules(root=tmp)
+        hit = {g.split(":")[0] for g in got}
+        assert "broken.py" in hit, "import 빠진 모듈 사용을 놓친다"
+        assert "fine.py" not in hit and "aliased.py" not in hit, "정상 import 를 오탐한다"
+        assert any(g.startswith("garbled.py") and "파싱 실패" in g for g in got), \
+            "구문 오류를 이름 문제로 뭉개거나 조용히 넘긴다"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
     # 결함 주입 — 관문·장부·셸 드라이버. 전부 대역이라 비용 0 이다.
     gate_faults()
     ledger_faults()
@@ -1945,7 +2031,7 @@ def selftest():
           "판정 기록 누락, setup 무결성, 실행 조건 적용, 데이터 분할, "
           "표식 사전 노출, 상태 초기화, 자기식별 누출, 문서 표기 대조, "
           "회귀 누적, 인터리빙, 프록시 축, 팔 인자·이름표, "
-          "프로브 등록부, 임포트 무비용, 관문·장부·셸 결함 주입 모두 통과")
+          "프로브 등록부, 임포트 무비용, 모듈 이름 묶임, 관문·장부·셸 결함 주입 모두 통과")
 
 
 if __name__ == "__main__":
