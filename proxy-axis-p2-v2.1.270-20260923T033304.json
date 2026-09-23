@@ -1,0 +1,123 @@
+{
+ "design": "proxy-axis-2x2",
+ "protocol_version": 2,
+ "scheme": "http",
+ "oracle": "curl 종료코드 + HTTP 상태코드 — passed 는 rc 0 이고 상태코드가 000·403·407 가 아님 · proxy_hit (프록시 팔에서만 정의)",
+ "block_codes": [
+  "000",
+  "403",
+  "407"
+ ],
+ "order": "라운드로빈 · 라운드 안은 시드로 섞음",
+ "order_seed": 727630027,
+ "n_head": 12,
+ "n_gate": 5,
+ "stopped": null,
+ "run_id": "proxy-p2-20260923T032101-v2.1.270",
+ "p_pp": 2.2852964029434616e-05,
+ "p_itt": 6.730380939561179e-05,
+ "arms": [
+  {
+   "arm": "A",
+   "proxy": false,
+   "allow_target": true,
+   "role": "gate",
+   "label": "프록시 없음 · 목적지 허용 (게이트: 픽스처·허용 목록)",
+   "planned": 5,
+   "valid": 5,
+   "ran": 4,
+   "curl_ok": 3,
+   "passed": 3,
+   "undecided": 0,
+   "code": {
+    "404": 3,
+    "000": 1,
+    "없음": 1
+   },
+   "proxy_hit": null,
+   "stray": 0,
+   "rc": {
+    "rc=0": 3,
+    "rc=28": 1,
+    "미실행": 1
+   },
+   "invalid": {},
+   "judged": 4
+  },
+  {
+   "arm": "B",
+   "proxy": false,
+   "allow_target": false,
+   "role": "head",
+   "label": "프록시 없음 · 목적지 제외 (대조)",
+   "planned": 12,
+   "valid": 12,
+   "ran": 8,
+   "curl_ok": 8,
+   "passed": 0,
+   "undecided": 0,
+   "code": {
+    "403": 8,
+    "없음": 4
+   },
+   "proxy_hit": null,
+   "stray": 0,
+   "rc": {
+    "rc=0": 8,
+    "미실행": 4
+   },
+   "invalid": {},
+   "judged": 8
+  },
+  {
+   "arm": "C",
+   "proxy": true,
+   "allow_target": true,
+   "role": "gate",
+   "label": "프록시 있음 · 목적지 허용 (게이트: 관측 지점)",
+   "planned": 5,
+   "valid": 5,
+   "ran": 3,
+   "curl_ok": 3,
+   "passed": 3,
+   "undecided": 0,
+   "code": {
+    "200": 3,
+    "없음": 2
+   },
+   "proxy_hit": 3,
+   "stray": 0,
+   "rc": {
+    "rc=0": 3,
+    "미실행": 2
+   },
+   "invalid": {},
+   "judged": 3
+  },
+  {
+   "arm": "D",
+   "proxy": true,
+   "allow_target": false,
+   "role": "head",
+   "label": "프록시 있음 · 목적지 제외 (처치)",
+   "planned": 12,
+   "valid": 12,
+   "ran": 10,
+   "curl_ok": 10,
+   "passed": 10,
+   "undecided": 0,
+   "code": {
+    "200": 10,
+    "없음": 2
+   },
+   "proxy_hit": 10,
+   "stray": 0,
+   "rc": {
+    "rc=0": 10,
+    "미실행": 2
+   },
+   "invalid": {},
+   "judged": 10
+  }
+ ]
+}
