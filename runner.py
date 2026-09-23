@@ -684,7 +684,9 @@ def adapter_claude_code(case, ws):
         # 결과물이 어디서 만들어졌는지 못 봤다.
         parent = d.get("parent_tool_use_id")
         sub = d.get("subagent_type")
-        for b in (d.get("message") or {}).get("content") or []:
+        # `message` 가 문자열인 이벤트가 2.1.270 에 있다 — dict 일 때만 파고든다.
+        _msg = d.get("message")
+        for b in ((_msg.get("content") or []) if isinstance(_msg, dict) else []):
             if not isinstance(b, dict):
                 continue
             if b.get("type") == "tool_use":

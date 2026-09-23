@@ -161,8 +161,10 @@ def one_run(framing, mode, sandbox, model):
             d = json.loads(line)
         except json.JSONDecodeError:
             continue
-        msg = d.get("message") or {}
-        ct = msg.get("content")
+        # 2.1.270 스트림의 일부 이벤트는 `message` 가 dict 가 아니라 문자열이다.
+        # 막지 않으면 `.get` 에서 죽어 회차가 통째로 무효가 된다(비용은 이미 나간 뒤).
+        msg = d.get("message")
+        ct = msg.get("content") if isinstance(msg, dict) else None
         for b in ct if isinstance(ct, list) else []:
             if b.get("type") == "tool_use":
                 uses[b.get("id")] = (b.get("name"), b.get("input"))
