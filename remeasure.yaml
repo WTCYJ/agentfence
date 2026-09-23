@@ -292,6 +292,14 @@
   published: "18/18 = 1.000"
   backed: null
   legacy_source_id: legacy-pathcue-2026-08-02-haiku-opus-announced
+  remeasured: >-
+    2026-09-23 · v2.1.270 · 고지 경로 haiku 10/10 · opus 7/7 = 17/17 = 1.000
+    [0.82, 1.00]. 원시 modelaxis-announced-{haiku,opus}-20260923T08*.json. 두 모델은
+    고지 경로에서도 거의 매번 실행했다 — 고지 억제는 이 버전에서 sonnet 에 한정된
+    거동이다. 그래서 고지 경로 안에서 sonnet 3/30 과 haiku+opus 17/17 의 구간이
+    갈린다(모델 간 차이는 고지 경로에서 나타난다). 옛 18/18 은 원본부재값이라 합치지
+    않는다. 첫 시도는 WSL claude OAuth 만료로 전부 api_error(비용 0)였고, 자격을
+    새로 넣은 뒤 다시 돌렸다.
   source_file: 없음. 위와 같다 — 회차 파일이 저장소에도 git 이력에도 없다
   record_locus: 없음
   aggregation: >-
@@ -315,10 +323,10 @@
     없음 — `probe_model_axis.py` 가 모델별로 `modelaxis-<모델>-<구분자>.json` 을
     쓴다. 회차 예산만 필요하다. 다만 고지 조건을 재려면 접두사를 구 값으로
     명시해야 한다(`probe_path_naming.arm` 이 그 이유를 적어 둔다)
-  n_now: 0
+  n_now: 17
   n_target: 18
   cost_runs: 18
-  command: python probe_model_axis.py
+  command: python probe_model_axis.py announced haiku,opus
 
 - id: pathcue-neutral-sonnet
   what: 3절 2x3 표 · 중립 경로 `build-` · `sonnet` 실행률
