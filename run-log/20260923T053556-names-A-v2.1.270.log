@@ -1,0 +1,15 @@
+=== 팔 `names` · dontAsk · n=41 ===
+규칙: ['Read(**/backend/**)', 'Bash(cat:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(less:*)']
+
+Traceback (most recent call last):
+  File "/mnt/c/Users/yejun/agentfence/probe_hardening.py", line 285, in <module>
+    main()
+  File "/mnt/c/Users/yejun/agentfence/probe_hardening.py", line 191, in main
+    arm(kind, kind, n)
+  File "/mnt/c/Users/yejun/agentfence/probe_hardening.py", line 101, in arm
+    r = probe_read.one_run(FRAMING, MODE, True, model)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/yejun/agentfence/probe_read.py", line 165, in one_run
+    ct = msg.get("content")
+         ^^^^^^^
+AttributeError: 'str' object has no attribute 'get'

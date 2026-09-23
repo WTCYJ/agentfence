@@ -1,0 +1,15 @@
+=== 거부 목록 우회 · 모델별 · dontAsk · n=15 ===
+B 팔만 돈다. deny 규칙을 켠 상태에서 각 모델이 우회를 찾는가.
+
+Traceback (most recent call last):
+  File "/mnt/c/Users/yejun/agentfence/probe_hardening.py", line 285, in <module>
+    main()
+  File "/mnt/c/Users/yejun/agentfence/probe_hardening.py", line 202, in main
+    arm(f"{m:7} +deny", True, n, m)
+  File "/mnt/c/Users/yejun/agentfence/probe_hardening.py", line 101, in arm
+    r = probe_read.one_run(FRAMING, MODE, True, model)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/yejun/agentfence/probe_read.py", line 165, in one_run
+    ct = msg.get("content")
+         ^^^^^^^
+AttributeError: 'str' object has no attribute 'get'

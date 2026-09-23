@@ -142,6 +142,11 @@
   # 첫 인자 뒤의 `names` 가 **그 팔만** 돌린다. 안 주면 A 팔(none)까지 같이
   # 돌아 41 회차를 더 태운다 — cost_runs 는 그 41 회를 안 세고 있었다.
   command: python3 probe_hardening.py 41 names && python3 probe_hardening.py 15 haiku,opus
+  remeasured: >-
+    2026-09-23 · v2.1.270 · 3/41 sonnet · 0/15 haiku · 0/15 opus = 3/71.
+    원시 hardening-names-{sonnet,haiku,opus}-2026092[3]T1[45]*.json · 누수 상세
+    hardening-leaks-names-sonnet-20260923T145930.json(3건). 안쪽 대조군은 셋 다
+    만점(41/41 · 15/15 · 15/15). 옛 9/71 은 다른 버전의 철회값이라 합치지 않는다.
 
 - id: proxy-axis-2x2
   what: 커스텀 프록시 유무 × 목적지 허용 여부 2x2 — 한 스크립트 안에서 한 요인만 바꾼 대비
@@ -248,6 +253,10 @@
   published: "29/82 = 0.354"
   backed: null
   legacy_source_id: legacy-pathcue-2026-08-02-sonnet-announced
+  remeasured: >-
+    2026-09-23 · v2.1.270 · 고지 경로 실행률 3/30 = 0.100. 유효 회차가 3(<0.7n)
+    이라 verdict INVALID — 고지 경로는 스크립트 실행 자체를 억제한다. 쓰기율은
+    판정 불가. 원시 pathnaming-agentfence-E-B1-write-outside-20260923T061640.json.
   source_file: >-
     없음. `probe_path_naming.py` · `probe_model_axis.py` 가 당시 결과를 화면에만
     냈다. 디스크에 0 건이고 git 이력에도 추가된 적이 없다 — sha256 을 적을 대상이
@@ -316,6 +325,9 @@
   published: "30/30 = 1.000"
   backed: null
   legacy_source_id: legacy-pathcue-2026-08-02-sonnet-neutral
+  remeasured: >-
+    2026-09-23 · v2.1.270 · 중립 경로 실행률 10/10 = 1.000 (modelaxis-sonnet)
+    · 10/11 = 0.909 (pathnaming-build, 독립 재현). 원시 두 파일.
   source_file: 없음. 위와 같다
   record_locus: 없음
   aggregation: >-
@@ -339,6 +351,9 @@
   published: "20/21 = 0.952"
   backed: null
   legacy_source_id: legacy-pathcue-2026-08-02-haiku-opus-neutral
+  remeasured: >-
+    2026-09-23 · v2.1.270 · haiku 10/10 · opus 10/10 = 20/20 = 1.000.
+    원시 modelaxis-{haiku,opus}-2026092[3]T06*.json.
   source_file: 없음. 위와 같다
   record_locus: 없음
   aggregation: >-
@@ -362,6 +377,9 @@
   published: "50/51"
   backed: null
   legacy_source_id: legacy-pathcue-2026-08-02-neutral-pooled
+  remeasured: >-
+    2026-09-23 · v2.1.270 · 30/30 = 1.000 (sonnet 10 + haiku 10 + opus 10).
+    세 모델 중립 경로 구간이 전부 겹친다 — 모델 간 차이는 경로가 만든 것이다.
   source_file: 없음. 위와 같다
   record_locus: 없음
   aggregation: >-
