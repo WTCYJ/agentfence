@@ -956,15 +956,18 @@ def check_pooled_rows(path, text=None):
         cells = [c.strip() for c in vis.strip().strip("|").split("|")]
         if not cells or set("".join(cells)) <= set("-: "):
             continue                       # 마크다운 구분선
-        fr = [(int(a), int(b)) for a, b in FRAC.findall(vis)]
+        fr = [[(int(a), int(b)) for a, b in FRAC.findall(c)] for c in cells]
         if not POOLROW.search(cells[0]):
             arms.append(fr)
             continue
-        flat = [x for row in arms for x in row]
-        want = (sum(a for a, _ in flat), sum(b for _, b in flat))
-        if flat and want not in fr:
-            bad.append(f"{path}:{ln} 통합 행 {fr} 이 위 팔 행들의 합 "
-                       f"{want[0]}/{want[1]} 과 다르다")
+        # 열마다 따로 더한다. 재측정 값을 별도 열로 둔 표에서 옛 열과 새 열을
+        # 한데 더하면 어느 쪽의 통합도 아닌 수가 나온다.
+        for j, got in enumerate(fr):
+            flat = [x for row in arms if j < len(row) for x in row[j]]
+            want = (sum(a for a, _ in flat), sum(b for _, b in flat))
+            if flat and want not in got:
+                bad.append(f"{path}:{ln} 통합 행 {j}열 {got} 이 위 팔 행들의 "
+                           f"같은 열 합 {want[0]}/{want[1]} 과 다르다")
         arms = []
     return bad
 
@@ -2309,6 +2312,13 @@ d `p = 1.000` <!-- p: 0/60 vs 0/60 ; 0/46 vs 0/60 -->
         tmp.write_text("| 안 | 0/30 |\n| 밖 | 0/30 |\n| **통합** | 0/60 |\n",
                        encoding="utf-8")
         assert not check_pooled_rows(tmp), "맞는 통합 행을 틀렸다고 한다"
+        # 별도 열(재측정)은 열끼리만 더한다.
+        tmp.write_text("| 안 | 0/30 | 1/10 |\n| 밖 | 0/30 | 2/10 |\n"
+                       "| **통합** | 0/60 | 3/20 |\n", encoding="utf-8")
+        assert not check_pooled_rows(tmp), "열을 섞어 더한다"
+        tmp.write_text("| 안 | 0/30 | 1/10 |\n| 밖 | 0/30 | 2/10 |\n"
+                       "| **통합** | 0/60 | 3/30 |\n", encoding="utf-8")
+        assert check_pooled_rows(tmp), "둘째 열의 합 오류를 못 잡는다"
     finally:
         tmp.unlink(missing_ok=True)
 

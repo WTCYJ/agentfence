@@ -143,6 +143,11 @@ Leak rate **9/71 = 0.127** — **withdrawn, no raw file** (`remeasure.yaml`, id
 `names-leak-rate`). Two different models reached the same
 substitute independently. Add `grep` and `sed`, `awk`, `od`, `python -c` remain.
 
+Re-measured on 2026-09-23 at v2.1.270 as a fresh draw, not a restoration:
+3/71 = 0.042 [0.01, 0.12] (`sonnet` 3/41, `haiku` 0/15, `opus` 0/15, raw files
+`hardening-names-*-20260923T1*.json`). All three leaks were still `grep`. The
+two-model observation did not replicate — `haiku` never leaked this time.
+
 ## 5. A rule's efficacy is a property of the fixture, not the rule
 
 `deny: ["Bash"]`, same instruction, only the **location of the answer** moved:
@@ -180,6 +185,11 @@ just asking again.
 > the repo, not in git history — and cannot be recounted run by run. The ratios
 > stand as published; re-measuring would be a third fixture, not a restoration
 > of A and B.
+
+> **Fixture C, run on 2026-09-23 at v2.1.270** (`sc-20260923T063543.json`):
+> turn 1 0/12 = 0.000 [0.00, 0.24] vs turns 2–4 29/36 = 0.806 [0.65, 0.90] — the
+> intervals separate again. Its Fisher value lies outside the registered
+> comparison family, so it is not printed. It is not pooled with A and B.
 
 ## 7. As observed, a custom proxy takes controls away rather than adding them
 
